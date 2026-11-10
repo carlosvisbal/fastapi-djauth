@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-djauth"
-version = "1.0.0"
-description = "Usuarios, grupos (roles), permisos y administración al estilo de Django para FastAPI, con sesión por cookie o token Bearer."
+version = "1.1.0"
+description = "Usuarios, roles, permisos y administración para FastAPI con el modelo de Django: sesión o token Bearer, seguro por defecto."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -35,19 +35,22 @@ dependencies = [
 test = ["pytest>=8", "httpx>=0.27"]
 postgres = ["psycopg[binary]>=3.1"]
 mysql = ["pymysql>=1.1"]
+oracle = ["oracledb>=2.0"]
 
 [project.scripts]
 djauth = "djauth.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/carlosvisbal/fastapi-djauth"
+Documentation = "https://github.com/carlosvisbal/fastapi-djauth/tree/main/docs"
+Changelog = "https://github.com/carlosvisbal/fastapi-djauth/blob/main/CHANGELOG.md"
 Issues = "https://github.com/carlosvisbal/fastapi-djauth/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["djauth"]
 
 [tool.hatch.build.targets.sdist]
-include = ["djauth", "tests", "README.md", "LICENSE"]
+include = ["djauth", "tests", "docs", "examples", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

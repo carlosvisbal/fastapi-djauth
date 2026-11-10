@@ -356,7 +356,7 @@ def test_websocket_auth(tmp_path):
         with client.websocket_connect(f"/ws?access_token={token}") as ws:
             assert ws.receive_json() == {"user": "admin"}
         login(client)
-        with client.websocket_connect("/ws") as ws:
+        with client.websocket_connect("/ws", headers={"Origin": "http://testserver"}) as ws:
             assert ws.receive_json() == {"user": "admin"}
 
 
@@ -379,3 +379,59 @@ def test_cli(tmp_path, monkeypatch, capsys):
     assert "root" in capsys.readouterr().out
     monkeypatch.setenv("DJAUTH_PASSWORD", "corta")
     assert main(["--db", db, "changepassword", "root"]) == 1
+
+
+# ---------------------------------------------------------------------- revisión de seguridad
+def test_cross_site_websocket_hijacking_is_blocked(tmp_path):
+    app, _ = make_app(tmp_path, protect=True)
+    with TestClient(app) as client:
+        login(client)
+        # Otro sitio abre el WebSocket: el navegador envía la cookie, pero el origen no coincide.
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws", headers={"Origin": "https://malicioso.example"}):
+            pass
+        # Sin Origin (no es un navegador) tampoco se acepta la cookie en un WebSocket.
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws"):
+            pass
+    app, _ = make_app(tmp_path / "b", protect=False)  # sin middleware: lo comprueba ws_user()
+    with TestClient(app) as client:
+        login(client)
+        with client.websocket_connect("/ws", headers={"Origin": "https://malicioso.example"}) as ws:
+            assert ws.receive_json() == {"user": None}
+
+
+def test_staff_cannot_take_over_users_with_more_permissions(setup):
+    client, kit = setup
+    perms = {p["key"]: p["id"] for p in kit.list_permissions()}
+    kit.create_user("rrhh", PWD, is_staff=True, permissions=[perms["auth.view_user"], perms["auth.change_user"]])
+    kit.create_user("gerente", PWD, is_staff=True, permissions=[perms["auth.view_user"], perms["ventas.aprobar_pedido"]])
+    kit.create_user("operario", PWD)
+    gerente, operario = kit.get_by_username("gerente").id, kit.get_by_username("operario").id
+    login(client, "rrhh", PWD)
+    for attempt in (
+        client.post(f"/auth/api/users/{gerente}/password", json={"password": "Toma-De-Cuenta-2026"}),
+        client.post(f"/auth/api/users/{gerente}/reset-link"),
+        client.patch(f"/auth/api/users/{gerente}", json={"email": "atacante@example.com"}),
+    ):
+        assert attempt.status_code == 403 and attempt.json()["code"] == "target_has_more_permissions"
+    # Sobre alguien sin permisos adicionales sí puede.
+    assert client.post(f"/auth/api/users/{operario}/password", json={"password": "Nueva-Clave-Op-2026"}).status_code == 200
+
+
+def test_login_from_another_site_is_rejected_even_without_cookie(setup):
+    client, _ = setup
+    res = client.post(
+        "/auth/api/login", json={"username": "admin", "password": PWD}, headers={"Origin": "https://malicioso.example"}
+    )
+    assert res.status_code == 403 and res.json()["code"] == "csrf_failed"
+    ok = client.post("/auth/api/login", json={"username": "admin", "password": PWD}, headers={"Origin": "http://testserver"})
+    assert ok.status_code == 200
+
+
+def test_session_cookie_is_secure_over_https(tmp_path):
+    app, _ = make_app(tmp_path)
+    with TestClient(app, base_url="https://testserver") as client:
+        res = client.post("/auth/api/login", json={"username": "admin", "password": PWD})
+        assert "Secure" in res.headers["set-cookie"]
+    with TestClient(app) as client:
+        res = client.post("/auth/api/login", json={"username": "admin", "password": PWD})
+        assert "Secure" not in res.headers["set-cookie"]

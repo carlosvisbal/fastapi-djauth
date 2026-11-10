@@ -3,6 +3,10 @@ import { $, api, config, safeNext, setMsg, token } from "./common.js";
 const params = new URLSearchParams(location.search);
 const cfg = await config();
 const next = safeNext(params.get("next"), cfg.home_url);
+if (cfg.username_field === "email") { // USERNAME_FIELD = "email": se entra con el correo
+  $("#username-label").textContent = "Correo";
+  $("#username").type = "email";
+}
 
 // Si ya hay sesión válida, no tiene sentido volver a pedir credenciales.
 try { await api("me"); location.replace(next); } catch { /* sin sesión: mostrar el formulario */ }
@@ -11,7 +15,8 @@ $("#form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const msg = $("#msg");
   const body = { username: $("#username").value.trim(), password: $("#password").value };
-  if (!body.username || !body.password) { setMsg(msg, "Escriba su usuario y contraseña.", "error"); return; }
+  const what = cfg.username_field === "email" ? "correo" : "usuario";
+  if (!body.username || !body.password) { setMsg(msg, `Escriba su ${what} y contraseña.`, "error"); return; }
   $("#submit").disabled = true;
   setMsg(msg, "Comprobando…");
   try {

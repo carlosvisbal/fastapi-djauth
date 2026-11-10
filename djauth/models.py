@@ -10,8 +10,11 @@ from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, Str
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-def build_models(prefix: str = "auth_") -> Any:
-    """Crea las clases con el prefijo de tabla indicado (cada `AuthKit` tiene su propio metadata)."""
+def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
+    """Crea las clases con el prefijo de tabla indicado (cada `AuthKit` tiene su propio metadata).
+
+    `user_mixin` aporta columnas propias al usuario (como heredar de `AbstractUser` en Django).
+    """
 
     class Base(DeclarativeBase):
         pass
@@ -56,7 +59,9 @@ def build_models(prefix: str = "auth_") -> Any:
         name: Mapped[str] = mapped_column(String(150), unique=True)
         permissions: Mapped[list[Permission]] = relationship(secondary=t_group_permissions, lazy="selectin")
 
-    class User(Base):
+    user_bases = (user_mixin, Base) if user_mixin is not None else (Base,)
+
+    class User(*user_bases):
         __tablename__ = f"{prefix}user"
         id: Mapped[int] = mapped_column(primary_key=True)
         username: Mapped[str] = mapped_column(String(150), unique=True, index=True)
@@ -78,6 +83,7 @@ def build_models(prefix: str = "auth_") -> Any:
         key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
         user_id: Mapped[int] = mapped_column(fk("user"), index=True)
         kind: Mapped[str] = mapped_column(String(10), default="session")  # session | bearer
+        backend: Mapped[str] = mapped_column(String(200), default="")  # backend que autenticó al usuario
         created: Mapped[datetime] = mapped_column(DateTime)
         expires: Mapped[datetime] = mapped_column(DateTime, index=True)
         ip: Mapped[str] = mapped_column(String(64), default="")

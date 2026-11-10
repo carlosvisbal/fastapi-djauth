@@ -92,20 +92,32 @@ const Users = (() => {
   $("#u-new").addEventListener("click", () => edit(null));
   $("#ue-back").addEventListener("click", list);
 
-  function extraInputs(values) {
-    $("#ue-extra").replaceChildren(...cfg.extra_fields.map((f) => {
-      const v = values?.[f.name];
-      const input = f.type === "bool"
-        ? el("input", { type: "checkbox", checked: !!v, "data-field": `extra.${f.name}`, "data-extra": f.name })
-        : f.type === "choice"
-          ? el("select", { "data-field": `extra.${f.name}`, "data-extra": f.name }, el("option", { value: "", text: "—" }), ...f.choices.map((c) => el("option", { value: c, text: c, selected: c === v })))
-          : el("input", { type: f.type === "number" ? "number" : "text", value: v ?? "", "data-field": `extra.${f.name}`, "data-extra": f.name, step: "any" });
-      return f.type === "bool"
-        ? el("div", { class: "field-wrap" }, el("label", { class: "check" }, input, f.label), f.help_text ? el("p", { class: "help", text: f.help_text }) : null)
-        : el("label", { class: "field" }, `${f.label}${f.required ? " *" : ""}`, input, f.help_text ? el("span", { class: "help", text: f.help_text }) : null);
-    }));
+  // Campos propios: columnas reales (cfg.user_fields, en el primer nivel del usuario) y campos JSON
+  // (cfg.extra_fields, dentro de `extra`). Los dos se editan igual en el formulario.
+  function fieldInput(f, value, key, scope) {
+    const attrs = { "data-field": key, "data-scope": scope, "data-name": f.name, disabled: f.editable === false };
+    if (f.type === "bool") return el("input", { type: "checkbox", checked: !!value, ...attrs });
+    if (f.type === "choice") {
+      return el("select", attrs, el("option", { value: "", text: "—" }), ...f.choices.map((c) => el("option", { value: c, text: c, selected: c === value })));
+    }
+    const type = { integer: "number", number: "number", date: "date", datetime: "datetime-local" }[f.type] || "text";
+    const v = value == null ? "" : f.type === "datetime" ? String(value).slice(0, 16) : value;
+    return el("input", { type, value: v, step: f.type === "integer" ? "1" : "any", maxlength: f.max_length || null, ...attrs });
   }
-  const extraValues = () => Object.fromEntries([...document.querySelectorAll("[data-extra]")].map((i) => [i.dataset.extra, i.type === "checkbox" ? i.checked : i.value]));
+  function fieldControl(f, value, key, scope) {
+    const input = fieldInput(f, value, key, scope);
+    const help = f.help_text ? el("span", { class: "help", text: f.help_text }) : null;
+    return f.type === "bool"
+      ? el("div", { class: "field-wrap" }, el("label", { class: "check" }, input, f.label), help)
+      : el("label", { class: "field" }, `${f.label}${f.required ? " *" : ""}`, input, help);
+  }
+  function extraInputs(user) {
+    $("#ue-extra").replaceChildren(
+      ...(cfg.user_fields || []).map((f) => fieldControl(f, user[f.name], f.name, "column")),
+      ...cfg.extra_fields.map((f) => fieldControl(f, user.extra?.[f.name], `extra.${f.name}`, "extra")));
+  }
+  const readField = (i) => (i.type === "checkbox" ? i.checked : i.value === "" ? null : i.value);
+  const scopedValues = (scope) => Object.fromEntries([...document.querySelectorAll(`#ue-extra [data-scope="${scope}"]:not([disabled])`)].map((i) => [i.dataset.name, readField(i)]));
 
   async function edit(id) {
     setMsg($("#ue-msg"), "");
@@ -117,6 +129,11 @@ const Users = (() => {
     $("#user-edit").hidden = false;
     $("#ue-title").textContent = id ? u.username : "Nuevo usuario";
     $("#ue-username").value = u.username;
+    // Con inicio de sesión por correo, el usuario es el correo: se oculta el campo y el correo es obligatorio.
+    const emailLogin = cfg.username_field === "email";
+    $("#ue-username").closest("label").hidden = emailLogin;
+    $("#ue-email").required = emailLogin;
+    $("#ue-email").closest("label").firstChild.textContent = emailLogin ? "Correo (para iniciar sesión) * " : "Correo ";
     $("#ue-email").value = u.email;
     $("#ue-first").value = u.first_name;
     $("#ue-last").value = u.last_name;
@@ -126,7 +143,7 @@ const Users = (() => {
     $("#ue-super").disabled = !me.is_superuser; // solo un superusuario concede o quita este nivel
     $("#ue-password-wrap").hidden = !!id;
     $("#ue-password").value = $("#ue-password2").value = "";
-    extraInputs(u.extra);
+    extraInputs(u);
     const myGroups = new Set(u.group_ids);
     $("#ue-groups").replaceChildren(...(state.groups.length ? state.groups.map((g) => el("label", { class: "check" },
       el("input", { type: "checkbox", value: g.id, checked: myGroups.has(g.id) }), g.name, el("code", { text: `${g.permissions.length} permisos` }))) : [el("p", { class: "muted small", text: "No hay grupos." })]));
@@ -145,11 +162,11 @@ const Users = (() => {
     ev.preventDefault();
     const msg = $("#ue-msg");
     const body = {
-      username: $("#ue-username").value.trim(), email: $("#ue-email").value.trim(),
+      ...(cfg.username_field === "email" ? {} : { username: $("#ue-username").value.trim() }), email: $("#ue-email").value.trim(),
       first_name: $("#ue-first").value.trim(), last_name: $("#ue-last").value.trim(),
       is_active: $("#ue-active").checked, is_staff: $("#ue-staff").checked,
       groups: [...$("#ue-groups").querySelectorAll("input:checked")].map((i) => Number(i.value)),
-      permissions: permsBox.ids(), extra: extraValues(),
+      permissions: permsBox.ids(), extra: scopedValues("extra"), ...scopedValues("column"),
     };
     if (me.is_superuser) body.is_superuser = $("#ue-super").checked;
     try {

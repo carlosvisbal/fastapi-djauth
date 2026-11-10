@@ -43,6 +43,11 @@ class AuthSettings:
     # --- Almacenamiento ---
     # Cualquier URL de SQLAlchemy: sqlite:///ruta/auth.sqlite3, postgresql+psycopg://…, mysql+pymysql://…
     database_url: str = "sqlite:///auth.sqlite3"
+    # Alternativa con el formato de DATABASES["default"] de Django (tiene prioridad sobre database_url):
+    # {"ENGINE": "django.db.backends.postgresql", "NAME": …, "USER": …, "PASSWORD": …, "HOST": …, "PORT": …}
+    database: dict[str, Any] | None = None
+    # Segundos antes de renovar una conexión del pool (como CONN_MAX_AGE): evita conexiones viejas.
+    database_conn_max_age: int = 1800
     table_prefix: str = "auth_"
 
     # --- Sitio (lo que ve el usuario) ---
@@ -84,8 +89,22 @@ class AuthSettings:
     login_max_failures: int = 5
     login_lockout_seconds: int = 300
 
+    # --- Campo con el que se inicia sesión (USERNAME_FIELD de Django): uno u otro, no los dos ---
+    # "username": nombre de usuario (por defecto). "email": el correo, que pasa a ser obligatorio y
+    # único sin distinguir mayúsculas; el username interno se mantiene igual al correo.
+    username_field: str = "username"
+
+    # --- Backends de autenticación (AUTHENTICATION_BACKENDS de Django) ---
+    # Rutas "paquete.modulo.Clase", clases o instancias. Se prueban en orden. Ver `djauth.backends`.
+    authentication_backends: tuple[Any, ...] = ("djauth.backends.ModelBackend",)
+
     # --- Personalización del usuario ---
+    # Campos extra guardados en JSON (sin tocar la tabla). Ver `ExtraField`.
     extra_fields: tuple[ExtraField, ...] = ()
+    # Columnas propias del usuario, como heredar de AbstractUser en Django: una clase con columnas de
+    # SQLAlchemy (`telefono: Mapped[str] = mapped_column(String(30), default="")`). Se añaden a la
+    # tabla al arrancar y aparecen en la API y en la administración. Ver README, "Extender el usuario".
+    user_mixin: type | None = None
 
     # --- Primer arranque ---
     # (usuario, contraseña, email): crea este superusuario si la base no tiene ningún usuario.

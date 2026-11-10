@@ -25,8 +25,12 @@ export const token = {
 
 export class ApiError extends Error {
   constructor(status, body) {
-    super(body?.detail || `Error ${status}`);
+    // Mensaje + pista de cómo resolverlo (ver docs/errores.md del paquete).
+    const detail = body?.detail || `Error ${status}`;
+    super(body?.hint ? `${detail} ${body.hint}` : detail);
     this.status = status;
+    this.code = body?.code || "";
+    this.hint = body?.hint || "";
     this.errors = body?.errors || {};
   }
 }
