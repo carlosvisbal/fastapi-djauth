@@ -14,11 +14,11 @@ kit = AuthKit(AuthSettings(
 
 ## Base de datos
 
-Dos formas equivalentes. La primera es la de Django:
+Dos formas equivalentes:
 
 ```python
 AuthSettings(database={
-    "ENGINE": "django.db.backends.postgresql",     # o postgresql_psycopg2, mysql, sqlite3, oracle
+    "ENGINE": "postgresql",                        # o mysql, sqlite, oracle, mssql
     "NAME": "miapp",
     "USER": "app",
     "PASSWORD": os.environ["DB_PASSWORD"],          # caracteres como @ / # no necesitan escaparse
@@ -32,12 +32,12 @@ AuthSettings(database_url="postgresql+psycopg://app:clave@localhost:5432/miapp")
 
 | Opción | Por defecto | Qué es |
 |---|---|---|
-| `database` | `None` | Diccionario estilo `DATABASES["default"]`. Tiene prioridad sobre `database_url`. |
+| `database` | `None` | Diccionario con `ENGINE`, `NAME`, `USER`, `PASSWORD`, `HOST`, `PORT` y `OPTIONS`. Tiene prioridad sobre `database_url`. |
 | `database_url` | `sqlite:///auth.sqlite3` | URL de SQLAlchemy. |
-| `database_conn_max_age` | 1800 | Segundos antes de renovar una conexión (como `CONN_MAX_AGE`). |
+| `database_conn_max_age` | 1800 | Segundos antes de renovar una conexión del pool. |
 | `table_prefix` | `auth_` | Prefijo de las tablas (`auth_user`, `auth_group`…). |
 
-**Motores** (`ENGINE`): `django.db.backends.postgresql` (también `postgresql_psycopg2`, `postgis`), `django.db.backends.mysql` (MariaDB), `django.db.backends.sqlite3`, `django.db.backends.oracle`, o los alias `postgresql`, `mysql`, `sqlite`, `oracle`, `mssql`.
+**Motores** (`ENGINE`): `postgresql` (también PostGIS), `mysql` (también MariaDB), `sqlite`, `oracle` y `mssql`. También acepta los nombres de Django (`django.db.backends.postgresql`…), para copiar una configuración existente.
 
 **Controlador:** se elige el que esté instalado (PostgreSQL: `psycopg`, luego `psycopg2`; MySQL: `PyMySQL`, luego `mysqlclient`). Fuerce uno con `"DRIVER": "psycopg2"`. Instalar: `pip install "fastapi-djauth[postgres]"` o `"fastapi-djauth[mysql]"`.
 
@@ -69,7 +69,7 @@ Las conexiones se verifican antes de usarse (una conexión cortada por el servid
 |---|---|---|
 | `trusted_origins` | `()` | Otros dominios suyos que pueden usar la cookie (frontend separado). |
 | `trust_proxy_headers` | `False` | Leer la IP real de `X-Forwarded-For` (solo detrás de su propio proxy). |
-| `password_iterations` | 1 200 000 | Iteraciones de PBKDF2 (el valor de Django 6.0). |
+| `password_iterations` | 1 200 000 | Iteraciones de PBKDF2 (valor recomendado actual). |
 | `password_min_length` | 8 | Longitud mínima de la contraseña. |
 | `password_max_length` | 1024 | Longitud máxima (evita abusos de CPU). |
 | `password_reset_timeout` | 3 días | Validez del enlace para restablecer contraseña, en segundos. |

@@ -2,6 +2,14 @@
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.2.0] - 2026-11-10
+
+### Añadido
+- Decoradores `@login_required`, `@permission_required`, `@staff_member_required`, `@superuser_required` y `@user_passes_test`, además de las dependencias `current_user`, `require_perm`, etc.
+
+### Cambiado
+- Los ejemplos usan los nombres cortos de motor (`"ENGINE": "postgresql"`) y ya no dan a entender que hace falta Django. Los nombres de Django se siguen aceptando.
+
 ## [1.1.0] - 2026-11-10
 
 ### Añadido

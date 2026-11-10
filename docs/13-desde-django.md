@@ -11,9 +11,10 @@
 | `AbstractUser` / `AUTH_USER_MODEL` | `AuthSettings(user_mixin=MiPerfil)` |
 | `Permission`, `Group` | Iguales: `app.codename`, grupos con permisos |
 | `class Meta: permissions = [...]` | `AuthSettings(permissions={...})` o `kit.register_permissions(...)` |
-| `@login_required` | `Depends(current_user)` |
-| `@permission_required("a.b")` | `Depends(require_perm("a.b"))` |
-| `@staff_member_required` | `Depends(require_staff)` |
+| `@login_required` | `@login_required` (mismo nombre) o `Depends(current_user)` |
+| `@permission_required("a.b")` | `@permission_required("a.b")` o `Depends(require_perm("a.b"))` |
+| `@staff_member_required` | `@staff_member_required` o `Depends(require_staff)` |
+| `@user_passes_test(test)` | `@user_passes_test(test, "mensaje")` |
 | `request.user` | `user: AuthUser = Depends(current_user)` (o `optional_user`) |
 | `user.has_perm`, `has_perms`, `has_module_perms`, `get_full_name` | Iguales |
 | `authenticate(request, username=…, password=…)` | `kit.authenticate(username, password)` |

@@ -4,7 +4,7 @@ Dos formas, combinables:
 
 | | Columnas propias (`user_mixin`) | Campos JSON (`extra_fields`) |
 |---|---|---|
-| Equivale a | Heredar de `AbstractUser` en Django | Un campo JSON con formulario |
+| Ideal para | Datos que consultará o filtrará | Datos ocasionales, sin cambiar la tabla |
 | Se guarda en | Columnas reales de la tabla | La columna `extra` |
 | Consultar o filtrar en SQL | Sí | Limitado |
 | Cambia la tabla | Sí (columnas nuevas se agregan solas) | No |

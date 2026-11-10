@@ -1,6 +1,6 @@
 # 6. Backends de autenticación
 
-El equivalente de `AUTHENTICATION_BACKENDS` de Django.
+Permiten iniciar sesión contra otras fuentes (LDAP, Active Directory, otro sistema, otras credenciales como un PIN) y sumar permisos de varias.
 
 ```python
 AuthSettings(authentication_backends=(
@@ -11,14 +11,14 @@ AuthSettings(authentication_backends=(
 
 Acepta rutas `"paquete.modulo.Clase"`, clases o instancias.
 
-## Cómo funciona (igual que Django)
+## Cómo funciona
 
 | Paso | Comportamiento |
 |---|---|
 | Iniciar sesión | Se prueba cada backend en orden. El primero que devuelve un usuario gana. |
 | Un backend lanza `PermissionDeniedError` | Se detiene la búsqueda y el acceso se niega. |
 | Un backend no acepta esas credenciales | Se salta (su `authenticate` no tiene esos parámetros). |
-| Un backend falla (p. ej. LDAP sin red) | Se registra el error y se prueba el siguiente. *(Django propagaría la excepción.)* |
+| Un backend falla (p. ej. LDAP sin red) | Se registra el error y se prueba el siguiente. |
 | Sesión abierta | Recuerda qué backend autenticó al usuario y le pide el usuario con `get_user()`. |
 | Se quita un backend de la configuración | Las sesiones que abrió dejan de valer. |
 | Permisos | `user.has_perm()` suma lo que concede cada backend (`get_all_permissions`). |

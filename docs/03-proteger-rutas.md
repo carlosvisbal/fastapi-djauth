@@ -31,6 +31,44 @@ def inicio(user: AuthUser | None = Depends(optional_user)):   # público, pero s
 |---|---|
 | `401` con `code: "not_authenticated"` | `403` con `code: "missing_permission"` y el permiso que falta |
 
+## Con decoradores
+
+Los mismos controles, escritos como decoradores. Van **debajo** de `@app.get(...)`:
+
+```python
+from djauth import login_required, permission_required, staff_member_required, superuser_required, user_passes_test
+
+@app.get("/perfil")
+@login_required
+def perfil(): ...
+
+@app.post("/pedidos/{id}/aprobar")
+@permission_required("ventas.aprobar_pedido")          # varios: ("ventas.view_pedido", "ventas.change_pedido")
+async def aprobar(id: int): ...
+
+@app.get("/reportes-internos")
+@staff_member_required
+def internos(): ...
+
+@app.get("/mantenimiento")
+@superuser_required
+def mantenimiento(): ...
+
+@app.get("/solo-empresa")
+@user_passes_test(lambda u: u.email.endswith("@empresa.com"), "Solo cuentas de la empresa.")
+def solo_empresa(): ...
+```
+
+Se comportan igual que las dependencias (mismos errores, aparecen en `/docs`) y se pueden apilar. Si la función necesita al usuario, pídalo con `user: AuthUser = Depends(current_user)`.
+
+| Decorador | Dependencia equivalente |
+|---|---|
+| `@login_required` | `Depends(current_user)` |
+| `@permission_required("a.b")` | `Depends(require_perm("a.b"))` |
+| `@staff_member_required` | `Depends(require_staff)` |
+| `@superuser_required` | `Depends(require_superuser)` |
+| `@user_passes_test(test)` | — |
+
 ## Toda la aplicación a la vez
 
 ```python
@@ -80,7 +118,7 @@ Un sistema externo envía `X-API-Key: <llave>` o `Authorization: Bearer <llave>`
 
 ## El usuario autenticado
 
-`AuthUser` tiene la interfaz de Django:
+`AuthUser` tiene estos atributos y métodos:
 
 ```python
 user.username, user.email, user.first_name, user.is_staff, user.is_superuser, user.groups

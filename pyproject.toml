@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-djauth"
-version = "1.1.0"
-description = "Usuarios, roles, permisos y administración para FastAPI con el modelo de Django: sesión o token Bearer, seguro por defecto."
+version = "1.2.0"
+description = "Usuarios, roles, permisos y administración para FastAPI: sesión o token Bearer, seguro por defecto."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

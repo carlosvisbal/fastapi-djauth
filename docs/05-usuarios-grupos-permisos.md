@@ -1,10 +1,10 @@
 # 5. Usuarios, grupos y permisos
 
-Mismo modelo que Django: un **permiso** es `app.codename`; un **grupo** (rol) reúne permisos; un usuario recibe los permisos de sus grupos más los que se le asignen directamente. Un **superusuario** los tiene todos.
+Un **permiso** es `app.codename`; un **grupo** (rol) reúne permisos; un usuario recibe los permisos de sus grupos más los que se le asignen directamente. Un **superusuario** los tiene todos.
 
 ## Iniciar sesión con usuario o con correo
 
-Como `USERNAME_FIELD` en Django: un proyecto usa **uno u otro**, no los dos.
+Un proyecto usa **uno u otro**, no los dos.
 
 ```python
 AuthSettings(username_field="username")   # por defecto: se entra con el nombre de usuario
@@ -79,4 +79,4 @@ link_token = kit.make_reset_token(user_id)              # para enviar un enlace 
 
 ## Permisos de la administración
 
-Con los nombres de Django: `auth.view_user`, `auth.add_user`, `auth.change_user`, `auth.delete_user`, `auth.view_group`, `auth.add_group`, `auth.change_group`, `auth.delete_group`, `auth.view_permission`, `auth.view_logentry`. Para entrar a la administración hace falta además **"Acceso a la administración"** (`is_staff`).
+`auth.view_user`, `auth.add_user`, `auth.change_user`, `auth.delete_user`, `auth.view_group`, `auth.add_group`, `auth.change_group`, `auth.delete_group`, `auth.view_permission`, `auth.view_logentry`. Para entrar a la administración hace falta además **"Acceso a la administración"** (`is_staff`).

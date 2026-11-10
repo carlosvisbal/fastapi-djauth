@@ -21,6 +21,7 @@ from djauth.api import (
 from djauth.backends import AllowAllUsersModelBackend, AuthRequest, BaseBackend, ModelBackend
 from djauth.core import SERVICE_USER, AuthKit, AuthUser
 from djauth.database import DatabaseConfigError, url_from_django
+from djauth.decorators import login_required, permission_required, staff_member_required, superuser_required, user_passes_test
 from djauth.errors import (
     AuthError,
     InvalidCredentialsError,
@@ -33,7 +34,7 @@ from djauth.errors import (
 from djauth.hashers import check_password, make_password
 from djauth.settings import AuthSettings, ExtraField
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 __all__ = [
     "SERVICE_USER",
@@ -59,12 +60,17 @@ __all__ = [
     "check_password",
     "current_user",
     "identify",
+    "login_required",
     "make_password",
     "optional_user",
+    "permission_required",
     "require_perm",
     "require_staff",
     "require_superuser",
     "rule",
+    "staff_member_required",
+    "superuser_required",
     "url_from_django",
+    "user_passes_test",
     "ws_user",
 ]
