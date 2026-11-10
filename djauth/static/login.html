@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Iniciar sesión</title>
+  <link rel="stylesheet" href="static/djauth.css">
+</head>
+<body>
+  <main class="auth-page">
+    <div class="card auth-card">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span data-site-name>Administración</span></div>
+      <h1>Iniciar sesión</h1>
+      <form id="form" novalidate>
+        <label class="field">Usuario <input type="text" id="username" autocomplete="username" required autofocus maxlength="150"></label>
+        <label class="field">Contraseña <input type="password" id="password" autocomplete="current-password" required maxlength="4096"></label>
+        <button class="btn primary" type="submit" id="submit">Entrar</button>
+      </form>
+      <p class="msg" id="msg" role="alert"></p>
+      <p class="muted small">¿Olvidó su contraseña? Pida a un administrador un enlace para restablecerla.</p>
+    </div>
+  </main>
+  <script type="module" src="static/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Nueva contraseña</title>
+  <link rel="stylesheet" href="static/djauth.css">
+</head>
+<body>
+  <main class="auth-page">
+    <div class="card auth-card">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span data-site-name>Administración</span></div>
+      <h1>Elija una contraseña nueva</h1>
+      <form id="form" novalidate>
+        <label class="field">Contraseña nueva <input type="password" id="p1" data-field="password" autocomplete="new-password" required maxlength="4096"></label>
+        <label class="field">Repita la contraseña <input type="password" id="p2" autocomplete="new-password" required maxlength="4096"></label>
+        <ul class="help" id="help"></ul>
+        <button class="btn primary" type="submit" id="submit">Guardar contraseña</button>
+      </form>
+      <p class="msg" id="msg" role="alert"></p>
+      <p><a href="login">Ir a iniciar sesión</a></p>
+    </div>
+  </main>
+  <script type="module" src="static/reset.js"></script>
+</body>
+</html>

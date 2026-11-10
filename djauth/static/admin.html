@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administración de usuarios</title>
+  <link rel="stylesheet" href="static/djauth.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span data-site-name>Administración</span></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="users" aria-selected="true">Usuarios</button>
+      <button role="tab" data-tab="groups">Grupos y roles</button>
+      <button role="tab" data-tab="perms">Permisos</button>
+      <button role="tab" data-tab="log">Registro</button>
+    </nav>
+    <div class="who"><a class="btn ghost" id="home">← Volver al sitio</a><a class="btn ghost" href="account" id="who"></a><button class="btn" id="logout">Cerrar sesión</button></div>
+  </header>
+
+  <main>
+    <!-- ========================================================== USUARIOS -->
+    <section id="tab-users">
+      <div id="users-list">
+        <div class="toolbar">
+          <input type="search" id="u-q" placeholder="Buscar por usuario, nombre o correo" aria-label="Buscar usuarios">
+          <select id="u-active" aria-label="Estado"><option value="">Todos los estados</option><option value="true">Activos</option><option value="false">Inactivos</option></select>
+          <select id="u-staff" aria-label="Acceso"><option value="">Todo el personal</option><option value="true">Con acceso a la administración</option><option value="false">Sin acceso a la administración</option></select>
+          <select id="u-group" aria-label="Grupo"><option value="">Todos los grupos</option></select>
+          <span class="muted" id="u-total"></span>
+          <button class="btn primary" id="u-new">Agregar usuario</button>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr>
+              <th><button class="btn ghost small" data-order="username">Usuario</button></th>
+              <th>Nombre</th><th>Correo</th><th>Grupos</th><th>Activo</th><th>Administración</th><th>Superusuario</th>
+              <th><button class="btn ghost small" data-order="-last_login">Último acceso</button></th>
+            </tr></thead>
+            <tbody id="u-rows"></tbody>
+          </table>
+          <div class="pager"><button class="btn ghost" id="u-prev">← Anterior</button><span class="muted" id="u-page"></span><button class="btn ghost" id="u-next">Siguiente →</button></div>
+        </div>
+      </div>
+
+      <div id="user-edit" hidden>
+        <div class="toolbar"><button class="btn ghost" id="ue-back">← Usuarios</button><h1 id="ue-title">Usuario</h1></div>
+        <form id="ue-form" novalidate>
+          <div class="layout">
+            <section class="card">
+              <h2>Datos</h2>
+              <div class="form-grid">
+                <label class="field">Usuario <input type="text" data-field="username" id="ue-username" maxlength="150" required autocomplete="off">
+                  <span class="help">Hasta 150 caracteres: letras, números y @ . + - _</span></label>
+                <label class="field">Correo <input type="email" data-field="email" id="ue-email" maxlength="254" autocomplete="off"></label>
+                <label class="field">Nombre <input type="text" data-field="first_name" id="ue-first" maxlength="150"></label>
+                <label class="field">Apellidos <input type="text" data-field="last_name" id="ue-last" maxlength="150"></label>
+              </div>
+              <div class="form-grid" id="ue-extra"></div>
+              <div id="ue-password-wrap">
+                <h3>Contraseña</h3>
+                <div class="form-grid">
+                  <label class="field">Contraseña <input type="password" data-field="password" id="ue-password" autocomplete="new-password" maxlength="4096"></label>
+                  <label class="field">Repita la contraseña <input type="password" id="ue-password2" autocomplete="new-password" maxlength="4096"></label>
+                </div>
+                <p class="help">Déjela vacía para que el usuario no pueda entrar hasta que le genere un enlace para elegirla.</p>
+              </div>
+              <h3>Estado</h3>
+              <div class="field-wrap"><label class="check"><input type="checkbox" id="ue-active" data-field="is_active"> Activo</label>
+                <p class="help">Desmarque en lugar de eliminar: conserva el historial y cierra sus sesiones.</p></div>
+              <div class="field-wrap"><label class="check"><input type="checkbox" id="ue-staff" data-field="is_staff"> Acceso a la administración</label>
+                <p class="help">Puede entrar a esta vista; lo que puede hacer en ella depende de sus permisos.</p></div>
+              <div class="field-wrap"><label class="check"><input type="checkbox" id="ue-super" data-field="is_superuser"> Superusuario</label>
+                <p class="help">Tiene todos los permisos sin asignarlos uno a uno.</p></div>
+              <p class="muted small" id="ue-dates"></p>
+            </section>
+            <section class="card">
+              <h2>Grupos (roles)</h2>
+              <div class="perm-box field-wrap" id="ue-groups" data-field="groups"></div>
+              <p class="help">El usuario recibe todos los permisos de sus grupos.</p>
+              <h2>Permisos individuales</h2>
+              <input type="search" id="ue-perm-q" placeholder="Filtrar permisos" aria-label="Filtrar permisos">
+              <div class="perm-box field-wrap" id="ue-perms" data-field="permissions"></div>
+              <p class="inherited" id="ue-inherited"></p>
+            </section>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="submit" id="ue-save">Guardar</button>
+            <button class="btn" type="button" id="ue-reset-link">Enlace para nueva contraseña</button>
+            <button class="btn" type="button" id="ue-setpass">Asignar contraseña</button>
+            <button class="btn" type="button" id="ue-logout">Cerrar sus sesiones</button>
+            <button class="btn" type="button" id="ue-history">Ver su historial</button>
+            <button class="btn danger" type="button" id="ue-delete">Eliminar</button>
+          </div>
+          <p class="msg" id="ue-msg" role="status"></p>
+          <div class="notice" id="ue-notice" hidden></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ========================================================== GRUPOS -->
+    <section id="tab-groups" hidden>
+      <div class="layout">
+        <section class="card">
+          <div class="toolbar"><h2>Grupos y roles</h2><button class="btn primary" id="g-new">Agregar grupo</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Grupo</th><th>Permisos</th><th>Miembros</th></tr></thead><tbody id="g-rows"></tbody></table></div>
+        </section>
+        <section class="card" id="group-edit" hidden>
+          <form id="g-form" novalidate>
+            <h2 id="g-title">Grupo</h2>
+            <label class="field">Nombre <input type="text" id="g-name" data-field="name" maxlength="150" required></label>
+            <h3>Permisos</h3>
+            <input type="search" id="g-perm-q" placeholder="Filtrar permisos" aria-label="Filtrar permisos">
+            <div class="perm-box field-wrap" id="g-perms" data-field="permissions"></div>
+            <div class="actions">
+              <button class="btn primary" type="submit">Guardar</button>
+              <button class="btn" type="button" id="g-all">Marcar todos</button>
+              <button class="btn" type="button" id="g-none">Ninguno</button>
+              <button class="btn danger" type="button" id="g-delete">Eliminar grupo</button>
+            </div>
+            <p class="msg" id="g-msg" role="status"></p>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <!-- ========================================================== PERMISOS -->
+    <section id="tab-perms" hidden>
+      <div class="card">
+        <h2>Permisos disponibles</h2>
+        <p class="muted">Los declara la aplicación en su código; aquí se asignan a grupos o a usuarios.</p>
+        <div class="table-wrap"><table><thead><tr><th>Aplicación</th><th>Código</th><th>Descripción</th></tr></thead><tbody id="p-rows"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ========================================================== REGISTRO -->
+    <section id="tab-log" hidden>
+      <div class="card">
+        <div class="toolbar"><h2>Registro de acciones</h2><span class="chip muted" id="l-filter"></span><button class="btn ghost" id="l-clear" hidden>Ver todo</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Objeto</th><th>Detalle</th></tr></thead><tbody id="l-rows"></tbody></table></div>
+        <div class="pager"><button class="btn ghost" id="l-prev">← Más recientes</button><span class="muted" id="l-page"></span><button class="btn ghost" id="l-next">Más antiguas →</button></div>
+      </div>
+    </section>
+    <p class="msg" id="msg" role="alert"></p>
+  </main>
+  <script type="module" src="static/admin.js"></script>
+</body>
+</html>

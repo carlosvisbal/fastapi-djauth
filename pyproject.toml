@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-djauth"
+version = "1.0.0"
+description = "Usuarios, grupos (roles), permisos y administración al estilo de Django para FastAPI, con sesión por cookie o token Bearer."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Carlos Daniel Visbal Atencia" }]
+keywords = ["fastapi", "auth", "authentication", "permissions", "rbac", "admin", "django", "users"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Natural Language :: Spanish",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Session",
+    "Topic :: Security",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "sqlalchemy>=2.0,<3.0",
+    "pydantic>=2.5,<3.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "httpx>=0.27"]
+postgres = ["psycopg[binary]>=3.1"]
+mysql = ["pymysql>=1.1"]
+
+[project.scripts]
+djauth = "djauth.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/carlosvisbal/fastapi-djauth"
+Issues = "https://github.com/carlosvisbal/fastapi-djauth/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["djauth"]
+
+[tool.hatch.build.targets.sdist]
+include = ["djauth", "tests", "README.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

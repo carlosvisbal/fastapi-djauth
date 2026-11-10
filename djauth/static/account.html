@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mi cuenta</title>
+  <link rel="stylesheet" href="static/djauth.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span data-site-name>Administración</span></div>
+    <nav class="tabs"><a class="btn ghost" id="home">← Volver</a><a class="btn ghost" href="admin" id="admin-link" hidden>Administración</a></nav>
+    <div class="who"><span id="who"></span><button class="btn" id="logout">Cerrar sesión</button></div>
+  </header>
+  <main>
+    <h1>Mi cuenta</h1>
+    <div class="layout">
+      <section class="card">
+        <h2>Datos personales</h2>
+        <form id="profile" novalidate>
+          <div class="form-grid">
+            <label class="field">Usuario <input type="text" id="username" disabled></label>
+            <label class="field">Correo <input type="email" id="email" data-field="email" maxlength="254"></label>
+            <label class="field">Nombre <input type="text" id="first_name" maxlength="150"></label>
+            <label class="field">Apellidos <input type="text" id="last_name" maxlength="150"></label>
+          </div>
+          <div class="actions"><button class="btn primary" type="submit">Guardar</button></div>
+          <p class="msg" id="profile-msg" role="status"></p>
+        </form>
+        <h3>Grupos</h3><p id="groups" class="muted"></p>
+        <h3>Permisos</h3><p id="perms" class="muted small"></p>
+      </section>
+      <section class="card">
+        <h2>Cambiar contraseña</h2>
+        <form id="password" novalidate>
+          <div class="form-grid">
+            <label class="field">Contraseña actual <input type="password" id="old" data-field="old_password" autocomplete="current-password" maxlength="4096"></label>
+            <label class="field">Contraseña nueva <input type="password" id="new1" data-field="password" autocomplete="new-password" maxlength="4096"></label>
+            <label class="field">Repita la nueva <input type="password" id="new2" autocomplete="new-password" maxlength="4096"></label>
+          </div>
+          <ul class="help" id="help"></ul>
+          <p class="help">Al cambiarla se cierran sus sesiones en otros equipos.</p>
+          <div class="actions"><button class="btn primary" type="submit">Cambiar contraseña</button></div>
+          <p class="msg" id="password-msg" role="status"></p>
+        </form>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="static/account.js"></script>
+</body>
+</html>
