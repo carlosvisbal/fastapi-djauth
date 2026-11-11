@@ -29,7 +29,7 @@ from sqlalchemy.pool import StaticPool
 
 from djauth import hashers
 from djauth.backends import AuthRequest, BaseBackend, load_backend
-from djauth.database import url_from_django
+from djauth.database import check_sync_driver, url_from_django
 from djauth.errors import (
     InvalidCredentialsError,
     NotFoundError,
@@ -161,17 +161,26 @@ SERVICE_USER = AuthUser(id=0, username="api-key", is_superuser=True, is_service=
 class AuthKit:
     def __init__(self, settings: AuthSettings | None = None) -> None:
         self.settings = settings or AuthSettings()
-        self.models = build_models(self.settings.table_prefix, self.settings.user_mixin)
+        url = check_sync_driver(
+            url_from_django(self.settings.database) if self.settings.database else make_url(self.settings.database_url)
+        )
+        self.models = build_models(
+            self.settings.table_prefix, self.settings.user_mixin, empty_string_is_null=url.get_backend_name() == "oracle"
+        )
         self.custom_fields: tuple[UserField, ...] = user_fields(self.models.User)
         if self.settings.username_field not in ("username", "email"):
             raise ValueError(f'username_field debe ser "username" o "email" (recibido: {self.settings.username_field!r})')
         self.email_login = self.settings.username_field == "email"
+        samesite = self.settings.session_cookie_samesite
+        if samesite not in ("lax", "strict", "none"):
+            raise ValueError(f'session_cookie_samesite debe ser "lax", "strict" o "none" (recibido: {samesite!r})')
+        if samesite == "none" and not self.settings.session_cookie_secure:
+            raise ValueError('session_cookie_samesite="none" exige session_cookie_secure=True (los navegadores lo piden)')
         if not self.settings.authentication_backends:
             raise ValueError("authentication_backends no puede estar vacío")
         self.backends: list[tuple[str, BaseBackend]] = [load_backend(b) for b in self.settings.authentication_backends]
         for _, backend in self.backends:
             backend.kit = self
-        url = url_from_django(self.settings.database) if self.settings.database else make_url(self.settings.database_url)
         kwargs: dict[str, Any] = {"pool_pre_ping": True}  # descarta conexiones cortadas por el servidor
         if url.get_backend_name() == "sqlite":
             database = url.database or ""
@@ -231,6 +240,10 @@ class AuthKit:
         Las columnas se crean admitiendo nulos para no fallar con los registros que ya existen.
         """
         inspector = inspect(self.engine)
+        dialect = self.engine.dialect
+        quote = dialect.identifier_preparer.quote  # comillas del motor: "x" en PostgreSQL, `x` en MySQL…
+        # Sintaxis de cada motor para agregar una columna.
+        add = {"oracle": "ADD ({column} {ddl})", "mssql": "ADD {column} {ddl}"}.get(dialect.name, "ADD COLUMN {column} {ddl}")
         with self.engine.begin() as conn:
             for table in self.models.Base.metadata.sorted_tables:
                 if not inspector.has_table(table.name):
@@ -239,11 +252,13 @@ class AuthKit:
                 for column in table.columns:
                     if column.name in present:
                         continue
-                    ddl = column.type.compile(dialect=self.engine.dialect)
-                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl}'))
+                    # Los nombres vienen de los modelos (código del proyecto), nunca de una petición, y
+                    # van entre las comillas del motor.
+                    clause = add.format(column=quote(column.name), ddl=column.type.compile(dialect=dialect))
+                    conn.execute(text(f"ALTER TABLE {quote(table.name)} {clause}"))
                     default = column.default.arg if column.default is not None and column.default.is_scalar else None
                     if default is not None:
-                        conn.execute(text(f'UPDATE "{table.name}" SET "{column.name}" = :v'), {"v": default})
+                        conn.execute(table.update().values({column.name: default}))
                     logger.info("djauth: columna %s.%s añadida", table.name, column.name)
 
     def _ensure_unique_email_index(self) -> None:
@@ -377,8 +392,8 @@ class AuthKit:
         for f in self.custom_fields:
             snap[f.name] = to_json(getattr(user, f.name, None))
         extra = user.extra or {}
-        for f in self.settings.extra_fields:
-            snap[f"extra.{f.name}"] = extra.get(f.name)
+        for ef in self.settings.extra_fields:
+            snap[f"extra.{ef.name}"] = extra.get(ef.name)
         return snap
 
     def _sensitive_fields(self) -> set[str]:
@@ -389,7 +404,7 @@ class AuthKit:
     def _diff(self, before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         """{campo: {"old": …, "new": …}} de lo que cambió; los campos sensibles, sin valores."""
         hidden = self._sensitive_fields()
-        empty = (None, "", [])
+        empty: tuple[Any, ...] = (None, "", [])
         out: dict[str, Any] = {}
         for name in dict.fromkeys([*before, *after]):
             old, new = before.get(name), after.get(name)
@@ -584,7 +599,7 @@ class AuthKit:
 
     def _superusers_left(self, db: OrmSession, excluding: int) -> int:
         U = self.models.User
-        return db.scalar(select(func.count()).select_from(U).where(U.is_superuser, U.is_active, U.id != excluding))
+        return int(db.scalar(select(func.count()).select_from(U).where(U.is_superuser, U.is_active, U.id != excluding)) or 0)
 
     # ================================================================== usuarios
     def create_user(
@@ -708,7 +723,7 @@ class AuthKit:
             stmt = stmt.where(U.groups.any(self.models.Group.id == group_id))
         desc = order.startswith("-")
         column = (
-            getattr(U, order.lstrip("-"), None)
+            getattr(U, order.lstrip("-"))
             if order.lstrip("-")
             in {
                 "username",
@@ -770,15 +785,15 @@ class AuthKit:
                     changed.append(name)
             for name in ("is_active", "is_staff", "is_superuser"):
                 if name in changes and bool(changes[name]) != getattr(user, name):
-                    value = bool(changes[name])
+                    flag = bool(changes[name])
                     if name == "is_superuser" and actor is not None and not actor.is_superuser:
                         raise PermissionDeniedError("Solo un superusuario puede conceder o quitar ese nivel.")
-                    if actor is not None and actor.id == user.id and name == "is_active" and not value:
+                    if actor is not None and actor.id == user.id and name == "is_active" and not flag:
                         raise ValidationError({"is_active": ["No puede desactivar su propia cuenta."]})
                     losing_super = (
                         user.is_superuser
                         and user.is_active
-                        and ((name == "is_superuser" and not value) or (name == "is_active" and not value))
+                        and ((name == "is_superuser" and not flag) or (name == "is_active" and not flag))
                     )
                     if losing_super and self._superusers_left(db, user.id) == 0:
                         raise ValidationError(
@@ -786,7 +801,7 @@ class AuthKit:
                             code="last_superuser",
                             hint="Nombre a otro usuario superusuario antes de quitarle ese nivel.",
                         )
-                    setattr(user, name, value)
+                    setattr(user, name, flag)
                     changed.append(name)
             if "groups" in changes:
                 rows = self._load_groups(db, changes["groups"])

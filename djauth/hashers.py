@@ -31,11 +31,11 @@ def make_password(password: str | None, iterations: int = DEFAULT_ITERATIONS, sa
 
 
 def is_password_usable(encoded: str | None) -> bool:
-    return bool(encoded) and not encoded.startswith(UNUSABLE_PREFIX)
+    return encoded is not None and encoded != "" and not encoded.startswith(UNUSABLE_PREFIX)
 
 
 def check_password(password: str, encoded: str | None) -> bool:
-    if not is_password_usable(encoded):
+    if encoded is None or not is_password_usable(encoded):
         return False
     try:
         algorithm, iterations, salt, expected = encoded.split("$", 3)

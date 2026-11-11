@@ -4,17 +4,23 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-djauth"
-version = "1.3.0"
+dynamic = ["version"]
 description = "Usuarios, roles, permisos y administración para FastAPI: sesión o token Bearer, seguro por defecto."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Carlos Daniel Visbal Atencia" }]
-keywords = ["fastapi", "auth", "authentication", "permissions", "rbac", "admin", "django", "users"]
+maintainers = [{ name = "Carlos Daniel Visbal Atencia" }]
+keywords = [
+    "fastapi", "auth", "authentication", "authorization", "permissions", "rbac", "roles",
+    "users", "admin", "session", "bearer", "audit", "django",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
     "Framework :: FastAPI",
+    "Framework :: Pydantic :: 2",
     "Intended Audience :: Developers",
     "Natural Language :: Spanish",
     "Operating System :: OS Independent",
@@ -22,19 +28,23 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Internet :: WWW/HTTP :: Session",
     "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 dependencies = [
     "fastapi>=0.110",
-    "sqlalchemy>=2.0,<3.0",
+    "sqlalchemy>=2.0.24,<3.0",
     "pydantic>=2.5,<3.0",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8", "httpx>=0.27"]
+mssql = ["pymssql>=2.3"]  # sin dependencias del sistema; pyodbc también sirve (requiere el controlador ODBC)
 postgres = ["psycopg[binary]>=3.1"]
-mysql = ["pymysql>=1.1"]
+mysql = ["pymysql[rsa]>=1.1"]  # [rsa]: lo pide la autenticación por defecto de MySQL 8 en algunas conexiones
 oracle = ["oracledb>=2.0"]
 
 [project.scripts]
@@ -45,13 +55,28 @@ Homepage = "https://github.com/carlosvisbal/fastapi-djauth"
 Documentation = "https://github.com/carlosvisbal/fastapi-djauth/tree/main/docs"
 Changelog = "https://github.com/carlosvisbal/fastapi-djauth/blob/main/CHANGELOG.md"
 Issues = "https://github.com/carlosvisbal/fastapi-djauth/issues"
+Source = "https://github.com/carlosvisbal/fastapi-djauth"
+Security = "https://github.com/carlosvisbal/fastapi-djauth/security/policy"
+
+[tool.hatch.version]
+path = "djauth/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["djauth"]
 
 [tool.hatch.build.targets.sdist]
-include = ["djauth", "tests", "docs", "examples", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md"]
+include = [
+    "djauth", "tests", "docs", "examples",
+    "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md", "llms.txt",
+]
+exclude = ["**/__pycache__", "**/*.pyc"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["djauth"]
+ignore_missing_imports = true
+warn_unused_ignores = true

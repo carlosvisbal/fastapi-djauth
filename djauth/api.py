@@ -14,11 +14,11 @@ import hmac
 import json
 import logging
 import re
-from collections.abc import Awaitable, Callable, Iterable, MutableMapping
+from collections.abc import Awaitable, Callable, Coroutine, Iterable, MutableMapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, cast
 from urllib.parse import parse_qs, quote, urlsplit
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -93,7 +93,8 @@ def error_response(exc: AuthError) -> JSONResponse:
 async def auth_error_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Manejador global: cualquier `AuthError` (también en las rutas de la aplicación) responde con
     `{"detail", "code", "hint", "errors"}`."""
-    assert isinstance(exc, AuthError)
+    if not isinstance(exc, AuthError):  # solo se registra para AuthError; por si acaso, no se oculta
+        raise exc
     return error_response(exc)
 
 
@@ -148,7 +149,9 @@ def _kit(conn: HTTPConnection) -> AuthKit:
 
 
 def _equal(a: str | None, b: str | None) -> bool:
-    return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
+    if not a or not b:
+        return False
+    return hmac.compare_digest(a.encode(), b.encode())
 
 
 def identify(
@@ -178,10 +181,10 @@ def identify(
                 return user, "session"
     if websocket and query_string:
         query = parse_qs(query_string.decode("latin-1"))
-        token = (query.get("access_token") or [None])[0]
+        token = (query.get("access_token") or [""])[0]
         if s.enable_bearer and token and (user := kit.user_from_token(token, "bearer")):
             return user, "bearer"
-        if _equal((query.get("api_key") or [None])[0], api_key):
+        if _equal((query.get("api_key") or [""])[0], api_key):
             return SERVICE_USER, "api_key"
     return None, None
 
@@ -338,7 +341,7 @@ class AuthMiddleware:
             reason = f"{error.code}: {error.message}" if error else "not_authenticated"
             await send({"type": "websocket.close", "code": 1008, "reason": reason.encode()[:120].decode(errors="ignore")})
             return
-        status = 303 if location else error.status
+        status = 303 if location else (error.status if error else 401)
         body = json.dumps(error.to_dict(), ensure_ascii=False).encode() if error else b""
         headers = [(b"content-type", b"application/json; charset=utf-8"), (b"cache-control", b"no-store")]
         if location:
@@ -482,7 +485,7 @@ class GroupUpdateIn(BaseModel):
 class _AuthRoute(APIRoute):
     """Errores del núcleo y de formato como respuestas JSON descriptivas (ver docs/errores.md)."""
 
-    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
         handler = super().get_route_handler()
 
         async def wrapped(request: Request) -> Response:
@@ -502,6 +505,9 @@ class _AuthRoute(APIRoute):
             return response
 
         return wrapped
+
+
+OAUTH2_SCHEME = "bearer"  # valor de `token_type` en la respuesta de OAuth2 (RFC 6750)
 
 
 def _client_ip(request: Request, kit: AuthKit) -> str:
@@ -545,7 +551,7 @@ def build_router(kit: AuthKit) -> APIRouter:
             path="/",
             httponly=True,
             secure=s.session_cookie_secure or https,
-            samesite=s.session_cookie_samesite,
+            samesite=cast(Literal["lax", "strict", "none"], s.session_cookie_samesite),  # validado en AuthKit
         )
 
     # ------------------------------------------------------------------ público
@@ -614,7 +620,12 @@ def build_router(kit: AuthKit) -> APIRouter:
         def issue() -> dict[str, Any]:
             user = kit.authenticate(body.login, body.password, ip=ip)
             access = kit.login(user, kind="bearer", ip=ip, user_agent=request.headers.get("user-agent", ""))
-            return {"access_token": access, "token_type": "bearer", "expires_in": s.bearer_token_age, "user": user.to_dict()}
+            return {
+                "access_token": access,
+                "token_type": OAUTH2_SCHEME,
+                "expires_in": s.bearer_token_age,
+                "user": user.to_dict(),
+            }
 
         return await run_in_threadpool(issue)
 

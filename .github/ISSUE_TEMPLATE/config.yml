@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Informar una vulnerabilidad (privado)
+    url: https://github.com/carlosvisbal/fastapi-djauth/security/advisories/new
+    about: Las fallas de seguridad se informan en privado, nunca en un issue público.
+  - name: Documentación
+    url: https://github.com/carlosvisbal/fastapi-djauth/tree/main/docs
+    about: Guías de instalación, configuración y uso.

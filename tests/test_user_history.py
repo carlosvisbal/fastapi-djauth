@@ -37,7 +37,7 @@ def make(tmp_path, **overrides) -> tuple[TestClient, AuthKit]:
 
 @pytest.fixture
 def setup(tmp_path):
-    client, kit = make(tmp_path)
+    client, kit = make(tmp_path, trust_proxy_headers=True)
     with client:
         assert client.post("/auth/api/login", json={"username": "admin", "password": PWD}).status_code == 200
         yield client, kit
@@ -59,7 +59,10 @@ def test_create_update_password_delete_are_recorded(setup):
     uid = created["id"]
 
     res = client.patch(
-        f"/auth/api/users/{uid}", params={"reason": "Ascenso"}, json={"first_name": "Ana", "is_staff": True, "groups": []}
+        f"/auth/api/users/{uid}",
+        params={"reason": "Ascenso"},
+        json={"first_name": "Ana", "is_staff": True, "groups": []},
+        headers={"X-Forwarded-For": "10.0.0.25, 172.16.0.1"},
     )
     assert res.status_code == 200
     client.post(f"/auth/api/users/{uid}/password", json={"password": "Otra-Clave-Segura-1"})
@@ -82,7 +85,7 @@ def test_create_update_password_delete_are_recorded(setup):
     }
     assert update["reason"] == "Ascenso"
     assert update["actor"] == "admin" and update["actor_id"] == 1
-    assert update["ip"] == "testclient"
+    assert update["ip"] == "10.0.0.25"  # el cliente real, no el proxy
 
     assert password["changes"] == {"password": {"hidden": True}}
     assert password["reason"] == "Asignada por un administrador."

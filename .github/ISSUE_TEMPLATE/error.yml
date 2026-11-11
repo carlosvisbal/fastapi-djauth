@@ -1,0 +1,29 @@
+name: Informar un error
+description: Algo no funciona como dice la documentación.
+labels: [error]
+body:
+  - type: markdown
+    attributes:
+      value: "¿Es una falla de seguridad? **No la publique aquí**: use [el aviso privado](https://github.com/carlosvisbal/fastapi-djauth/security/advisories/new)."
+  - type: textarea
+    id: que-pasa
+    attributes:
+      label: Qué pasa
+      description: Qué hizo, qué esperaba y qué ocurrió. Incluya el error completo (`detail`, `code`, `hint`).
+    validations:
+      required: true
+  - type: textarea
+    id: reproducir
+    attributes:
+      label: Cómo reproducirlo
+      description: El código mínimo que lo provoca (sin contraseñas ni datos reales).
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versiones
+      description: "fastapi-djauth, Python, FastAPI, SQLAlchemy y la base de datos. Ej.: 1.3.1, 3.13, 0.115, 2.0.36, PostgreSQL 17"
+    validations:
+      required: true

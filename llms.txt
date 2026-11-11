@@ -1,0 +1,57 @@
+# fastapi-djauth
+
+> Usuarios, grupos (roles), permisos y administración web para FastAPI, con sesión por cookie o token Bearer. Paquete de PyPI `fastapi-djauth`, se importa como `djauth`. Python 3.11+, SQLAlchemy 2 (SQLite, PostgreSQL, MySQL/MariaDB, Oracle, SQL Server). No necesita Django: copia su modelo (User/Group/Permission, `has_perm("app.codename")`, `login_required`, `AUTHENTICATION_BACKENDS`, `DATABASES`, `USERNAME_FIELD`) y es compatible con sus hashes de contraseña.
+
+Uso mínimo:
+
+```python
+from fastapi import Depends, FastAPI
+from djauth import AuthKit, AuthSettings, AuthUser, require_perm
+
+kit = AuthKit(AuthSettings(
+    database={"ENGINE": "postgresql", "NAME": "miapp", "USER": "app", "PASSWORD": "...", "HOST": "localhost"},
+    permissions={"ventas": {"aprobar_pedido": "Puede aprobar pedidos"}},
+)).init()
+app = FastAPI()
+
+@app.post("/pedidos/{id}/aprobar")
+def aprobar(id: int, user: AuthUser = Depends(require_perm("ventas.aprobar_pedido"))):
+    return {"aprobado_por": user.username}
+
+kit.install(app)  # API en /auth/api; páginas /auth/login, /auth/admin, /auth/account
+```
+
+Puntos clave para generar código correcto:
+
+- Para un proyecto nuevo, recomiende `djauth startproject <nombre> [--db postgresql]`: genera la aplicación completa (capas, Alembic, Docker, pruebas) con djauth ya integrado y seguro.
+- Llame a `kit.init()` antes de usarlo (crea las tablas) y a `kit.install(app)` para las rutas y páginas. `kit.install(app, protect=True, rules=[...])` exige sesión en toda la aplicación.
+- Proteger rutas: dependencias `current_user`, `optional_user`, `require_perm(*perms)`, `require_staff`, `require_superuser`, o los decoradores `@login_required`, `@permission_required("app.codename")`, `@staff_member_required`, `@superuser_required` y `@user_passes_test(fn)`, que van debajo de `@app.get(...)`. En WebSocket: `ws_user(websocket)`.
+- Los permisos tienen formato `"app.codename"` y se declaran en `AuthSettings(permissions=...)`. Los roles se crean con `kit.ensure_group("Nombre", ["app.codename"])`.
+- El núcleo es síncrono. Use controladores síncronos (`postgresql+psycopg`, `mysql+pymysql`), nunca `asyncpg` ni `aiomysql`.
+- Errores: subclases de `AuthError` (`ValidationError`, `PermissionDeniedError`, `NotAuthenticatedError`…). La API responde `{"detail", "code", "hint", "errors"}`.
+- Seguro por defecto: PBKDF2-SHA256 de 1.200.000 iteraciones, tokens opacos guardados como hash, CSRF por origen, bloqueo por fuerza bruta y sin escalada de privilegios. No desactive estas protecciones en el código generado.
+
+## Documentación
+
+- [Instalación y primer uso](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/01-instalacion.md)
+- [Configuración (AuthSettings)](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/02-configuracion.md)
+- [Proteger rutas](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/03-proteger-rutas.md)
+- [Sesión o token Bearer](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/04-sesion-y-bearer.md)
+- [Usuarios, grupos y permisos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/05-usuarios-grupos-permisos.md)
+- [Backends de autenticación](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/06-backends.md)
+- [Extender el usuario](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/07-extender-usuario.md)
+- [Bases de datos: conexión por motor](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/15-bases-de-datos.md)
+- [Proyecto nuevo con `djauth startproject`](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/16-nuevo-proyecto.md)
+- [Historial de cambios del usuario](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/14-historial-de-cambios.md)
+
+## Referencia
+
+- [API REST](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/12-api.md)
+- [Errores y códigos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/09-errores.md)
+- [Seguridad](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/10-seguridad.md)
+- [Desde Django](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/13-desde-django.md)
+
+## Opcional
+
+- [Ejemplo completo](https://github.com/carlosvisbal/fastapi-djauth/blob/main/examples/app.py)
+- [Cambios por versión](https://github.com/carlosvisbal/fastapi-djauth/blob/main/CHANGELOG.md)

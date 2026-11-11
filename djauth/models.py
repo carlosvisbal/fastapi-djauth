@@ -7,18 +7,36 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    event,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm.attributes import set_committed_value
 
 
-def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
+def build_models(prefix: str = "auth_", user_mixin: type | None = None, *, empty_string_is_null: bool = False) -> Any:
     """Crea las clases con el prefijo de tabla indicado (cada `AuthKit` tiene su propio metadata).
 
     `user_mixin` aporta columnas propias al usuario (como heredar de `AbstractUser` en Django).
+    `empty_string_is_null`: para Oracle, que guarda `''` como NULL (ver `_allow_empty_strings`).
     """
 
     class Base(DeclarativeBase):
         pass
+
+    # Identity(): clave autoincremental en todos los motores (Oracle no tiene otra forma; en SQLite y
+    # MySQL equivale a su autoincremento de siempre).
 
     def fk(table: str) -> ForeignKey:
         return ForeignKey(f"{prefix}{table}.id", ondelete="CASCADE")
@@ -45,7 +63,7 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
     class Permission(Base):
         __tablename__ = f"{prefix}permission"
         __table_args__ = (UniqueConstraint("app_label", "codename"),)
-        id: Mapped[int] = mapped_column(primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
         app_label: Mapped[str] = mapped_column(String(100))
         codename: Mapped[str] = mapped_column(String(100))
         name: Mapped[str] = mapped_column(String(255))
@@ -56,15 +74,15 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
 
     class Group(Base):
         __tablename__ = f"{prefix}group"
-        id: Mapped[int] = mapped_column(primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
         name: Mapped[str] = mapped_column(String(150), unique=True)
         permissions: Mapped[list[Permission]] = relationship(secondary=t_group_permissions, lazy="selectin")
 
     user_bases = (user_mixin, Base) if user_mixin is not None else (Base,)
 
-    class User(*user_bases):
+    class User(*user_bases):  # type: ignore[misc]
         __tablename__ = f"{prefix}user"
-        id: Mapped[int] = mapped_column(primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
         username: Mapped[str] = mapped_column(String(150), unique=True, index=True)
         password: Mapped[str] = mapped_column(String(255))
         email: Mapped[str] = mapped_column(String(254), default="")
@@ -92,7 +110,7 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
 
     class LogEntry(Base):
         __tablename__ = f"{prefix}log"
-        id: Mapped[int] = mapped_column(primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
         action_time: Mapped[datetime] = mapped_column(DateTime, index=True)
         user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
         username: Mapped[str] = mapped_column(String(150), default="")
@@ -109,7 +127,7 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
         """
 
         __tablename__ = f"{prefix}user_history"
-        id: Mapped[int] = mapped_column(primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
         changed_at: Mapped[datetime] = mapped_column(DateTime, index=True)
         user_id: Mapped[int] = mapped_column(Integer, index=True)
         user_repr: Mapped[str] = mapped_column(String(150), default="")
@@ -129,7 +147,39 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
     class Models:
         pass
 
-    m = Models()
+    m: Any = Models()
     m.Base, m.User, m.Group, m.Permission, m.Session, m.LogEntry, m.Meta = Base, User, Group, Permission, Session, LogEntry, Meta
     m.UserChange = UserChange
+    if empty_string_is_null:
+        _allow_empty_strings(Base)
     return m
+
+
+def _allow_empty_strings(base: Any) -> None:
+    """Oracle guarda `''` como NULL. Como hace Django con Oracle, los textos cuyo valor por defecto es
+    `''` admiten NULL en la tabla, y al leerlos NULL vuelve a ser `''`: el resto del código ve lo mismo
+    en todos los motores. Incluye las columnas propias del usuario (`user_mixin`)."""
+    text_columns: dict[type, list[str]] = {}
+    for mapper in base.registry.mappers:
+        names = []
+        for column in mapper.local_table.columns:
+            default = column.default
+            if (
+                isinstance(column.type, String)
+                and not column.primary_key
+                and default is not None
+                and getattr(default, "is_scalar", False)
+                and default.arg == ""
+            ):
+                column.nullable = True
+                names.append(mapper.get_property_by_column(column).key)
+        if names:
+            text_columns[mapper.class_] = names
+
+    def restore(target: Any, *_: Any) -> None:
+        for name in text_columns.get(type(target), ()):
+            if target.__dict__.get(name, "") is None:
+                set_committed_value(target, name, "")
+
+    event.listen(base, "load", restore, propagate=True)
+    event.listen(base, "refresh", restore, propagate=True)

@@ -39,9 +39,11 @@ AuthSettings(database_url="postgresql+psycopg://app:clave@localhost:5432/miapp")
 
 **Motores** (`ENGINE`): `postgresql` (también PostGIS), `mysql` (también MariaDB), `sqlite`, `oracle` y `mssql`. También acepta los nombres de Django (`django.db.backends.postgresql`…), para copiar una configuración existente.
 
-**Controlador:** se elige el que esté instalado (PostgreSQL: `psycopg`, luego `psycopg2`; MySQL: `PyMySQL`, luego `mysqlclient`). Fuerce uno con `"DRIVER": "psycopg2"`. Instalar: `pip install "fastapi-djauth[postgres]"` o `"fastapi-djauth[mysql]"`.
+**Controlador:** se elige el que esté instalado (PostgreSQL: `psycopg`, luego `psycopg2`; MySQL: `PyMySQL`, luego `mysqlclient`). Fuerce uno con `"DRIVER": "psycopg2"`. Instalar: `pip install "fastapi-djauth[postgres]"`, `[mysql]`, `[oracle]` o `[mssql]`. Los controladores asíncronos (`asyncpg`, `aiomysql`) no sirven: se rechazan al arrancar.
 
 Las conexiones se verifican antes de usarse (una conexión cortada por el servidor no produce errores).
+
+Cómo conectar cada motor, sus opciones (SSL, juego de caracteres…) y sus diferencias: [Bases de datos](15-bases-de-datos.md).
 
 ## Sitio
 

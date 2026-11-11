@@ -1,0 +1,12 @@
+# Secretos: nunca al repositorio
+.env
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+data/
+*.sqlite3
+dist/

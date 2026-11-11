@@ -70,7 +70,7 @@ class AuthSettings:
     session_cookie_name: str = "sessionid"
     session_cookie_age: int = 60 * 60 * 24 * 14  # 2 semanas
     session_cookie_secure: bool = False  # True cuando el sitio se sirve por HTTPS
-    session_cookie_samesite: str = "lax"
+    session_cookie_samesite: str = "lax"  # "lax", "strict" o "none" (este último exige session_cookie_secure)
 
     # --- Protección CSRF y proxies ---
     # Orígenes externos que pueden enviar peticiones con la cookie de sesión (p. ej. un frontend en

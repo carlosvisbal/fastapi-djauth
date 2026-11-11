@@ -34,7 +34,7 @@ from djauth.errors import (
 from djauth.hashers import check_password, make_password
 from djauth.settings import AuthSettings, ExtraField
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 __all__ = [
     "SERVICE_USER",

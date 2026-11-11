@@ -1,5 +1,7 @@
 # 11. Comandos
 
+> Para crear un proyecto nuevo con djauth integrado: `djauth startproject <nombre>`. Ver [Proyecto nuevo](16-nuevo-proyecto.md).
+
 Al instalar el paquete queda el comando `djauth` (también `python -m djauth`).
 
 ```bash

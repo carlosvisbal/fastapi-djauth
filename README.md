@@ -1,7 +1,9 @@
 # fastapi-djauth
 
+[![PyPI](https://img.shields.io/pypi/v/fastapi-djauth)](https://pypi.org/project/fastapi-djauth/)
+[![Python](https://img.shields.io/pypi/pyversions/fastapi-djauth)](https://pypi.org/project/fastapi-djauth/)
 [![CI](https://github.com/carlosvisbal/fastapi-djauth/actions/workflows/ci.yml/badge.svg)](https://github.com/carlosvisbal/fastapi-djauth/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/carlosvisbal/fastapi-djauth)
+[![Tipado](https://img.shields.io/badge/tipado-mypy-blue)](https://github.com/carlosvisbal/fastapi-djauth/blob/main/pyproject.toml)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-green)](https://github.com/carlosvisbal/fastapi-djauth/blob/main/LICENSE)
 
 **Usuarios, roles, permisos y administración para FastAPI.** Sesión por cookie o token Bearer, una vista de administración lista, y la seguridad resuelta.
@@ -33,7 +35,17 @@ kit.install(app)   # API en /auth/api y páginas: /auth/login, /auth/admin, /aut
 - **Historial de cambios del usuario:** cada alta, modificación (valor anterior y nuevo por campo), cambio de contraseña y baja, con quién, cuándo, desde qué IP y por qué. Nunca guarda contraseñas.
 - **Seguro por defecto:** contraseñas PBKDF2-SHA256, bloqueo por fuerza bruta, CSRF, protección de WebSocket, sin escalada de privilegios entre administradores, cabeceras de seguridad.
 - **Errores descriptivos:** cada error trae mensaje, código fijo, campo afectado y cómo resolverlo.
-- **Cualquier base:** SQLite, PostgreSQL, MySQL/MariaDB, Oracle o SQL Server (SQLAlchemy 2).
+- **Cualquier base:** SQLite, PostgreSQL, MySQL/MariaDB, Oracle o SQL Server (SQLAlchemy 2), probadas contra servidores reales en cada cambio.
+- **Plantilla de proyecto:** `djauth startproject` crea una aplicación nueva lista para producción.
+
+## Proyecto nuevo en un minuto
+
+```bash
+pip install fastapi-djauth
+djauth startproject inventario --db postgresql
+```
+
+Crea una aplicación FastAPI completa con arquitectura por capas, usuarios y permisos, Alembic, Docker, pruebas y CI. Usted elige las versiones probadas o las últimas de cada librería. Ver [Proyecto nuevo](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/16-nuevo-proyecto.md).
 
 ## Instalación
 
@@ -49,7 +61,7 @@ Requiere Python 3.11+.
 
 | | |
 |---|---|
-| **Empezar** | [Instalación y primer uso](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/01-instalacion.md) · [Configuración](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/02-configuracion.md) · [Desde Django](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/13-desde-django.md) |
+| **Empezar** | [Proyecto nuevo](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/16-nuevo-proyecto.md) · [Instalación y primer uso](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/01-instalacion.md) · [Configuración](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/02-configuracion.md) · [Bases de datos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/15-bases-de-datos.md) · [Desde Django](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/13-desde-django.md) |
 | **Usar** | [Proteger rutas](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/03-proteger-rutas.md) · [Sesión o Bearer](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/04-sesion-y-bearer.md) · [Usuarios, grupos y permisos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/05-usuarios-grupos-permisos.md) |
 | **Personalizar** | [Backends de autenticación](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/06-backends.md) · [Extender el usuario](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/07-extender-usuario.md) |
 | **Operar** | [Administración web](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/08-administracion.md) · [Historial de cambios](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/14-historial-de-cambios.md) · [Comandos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/11-comandos.md) · [Seguridad](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/10-seguridad.md) |
@@ -65,11 +77,7 @@ Lea [docs/10-seguridad.md](https://github.com/carlosvisbal/fastapi-djauth/blob/m
 
 ## Contribuir
 
-```bash
-git clone https://github.com/carlosvisbal/fastapi-djauth.git && cd fastapi-djauth
-pip install -e ".[test]" ruff
-pytest && ruff check djauth tests
-```
+Las contribuciones son bienvenidas. Vea [CONTRIBUTING.md](https://github.com/carlosvisbal/fastapi-djauth/blob/main/CONTRIBUTING.md): cómo preparar el entorno, las pruebas (también contra PostgreSQL y MySQL reales) y el proceso de publicación.
 
 ## Licencia
 

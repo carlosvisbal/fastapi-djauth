@@ -2,6 +2,28 @@
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.3.1] - 2026-11-11
+
+Primera versión publicada en PyPI.
+
+### Corregido
+- **MySQL, Oracle y SQL Server:** agregar columnas propias (`user_mixin`) a una tabla existente fallaba porque los nombres iban entre comillas dobles y se usaba `ADD COLUMN` en todos los motores. Ahora se usan las comillas y la sintaxis de cada motor.
+- Un controlador asíncrono (`asyncpg`, `aiomysql`…) se rechaza al arrancar con un error claro, en lugar de fallar después. Ya no se elige `asyncpg` automáticamente.
+- **Oracle** no funcionaba: las claves primarias no se generaban (ahora usan `IDENTITY`) y los textos vacíos fallaban, porque Oracle guarda `''` como NULL. Ahora esos textos admiten NULL solo en Oracle y se leen como `''`, igual que hace Django.
+- Las claves primarias usan `IDENTITY` en PostgreSQL, Oracle y SQL Server para las tablas nuevas. Las tablas existentes no cambian.
+
+### Cambiado
+- Versión mínima de SQLAlchemy: 2.0.24, la primera que escapa `#` en las contraseñas al mostrar la URL de conexión.
+- El paquete declara sus tipos (`py.typed`) y pasa `mypy`.
+- Nuevos extras `mssql` (`pymssql`, sin dependencias del sistema) y `oracle` en las pistas de instalación.
+
+### Añadido
+- Guía de [bases de datos](docs/15-bases-de-datos.md): conexión y particularidades de cada motor.
+- CI con Python 3.11 a 3.14 en Linux, Windows y macOS, versiones mínimas de las dependencias, PostgreSQL, MySQL, Oracle y SQL Server reales, `mypy`, `bandit` y `pip-audit`.
+- `djauth startproject`: crea un proyecto FastAPI nuevo con arquitectura por capas, djauth integrado, Alembic, Docker, pruebas y CI; con las versiones probadas o las últimas. Ver [Nuevo proyecto](docs/16-nuevo-proyecto.md).
+- Publicación automática en TestPyPI y PyPI con *Trusted Publishing* y atestaciones firmadas.
+- `CONTRIBUTING.md`, plantillas de issues y de pull requests, Dependabot y `llms.txt`.
+
 ## [1.3.0] - 2026-11-11
 
 ### Añadido

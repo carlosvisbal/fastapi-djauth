@@ -435,3 +435,11 @@ def test_session_cookie_is_secure_over_https(tmp_path):
     with TestClient(app) as client:
         res = client.post("/auth/api/login", json={"username": "admin", "password": PWD})
         assert "Secure" not in res.headers["set-cookie"]
+
+
+def test_samesite_setting_is_validated(tmp_path):
+    with pytest.raises(ValueError, match="lax"):
+        AuthKit(AuthSettings(database_url="sqlite://", session_cookie_samesite="Lax "))
+    with pytest.raises(ValueError, match="session_cookie_secure"):
+        AuthKit(AuthSettings(database_url="sqlite://", session_cookie_samesite="none"))
+    AuthKit(AuthSettings(database_url="sqlite://", session_cookie_samesite="none", session_cookie_secure=True))

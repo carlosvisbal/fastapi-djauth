@@ -1,0 +1,14 @@
+# Mantiene al día las acciones de GitHub (fijadas por commit) y avisa de dependencias nuevas.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      acciones:
+        patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
