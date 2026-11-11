@@ -24,12 +24,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.orm.attributes import set_committed_value
 
+from djauth.routers import ModelMeta
+
 
 def build_models(prefix: str = "auth_", user_mixin: type | None = None, *, empty_string_is_null: bool = False) -> Any:
     """Crea las clases con el prefijo de tabla indicado (cada `AuthKit` tiene su propio metadata).
 
     `user_mixin` aporta columnas propias al usuario (como heredar de `AbstractUser` en Django).
-    `empty_string_is_null`: para Oracle, que guarda `''` como NULL (ver `_allow_empty_strings`).
+    `empty_string_is_null`: para Oracle, que guarda `''` como NULL (ver `allow_empty_strings_as_null`).
     """
 
     class Base(DeclarativeBase):
@@ -150,12 +152,25 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None, *, empty
     m: Any = Models()
     m.Base, m.User, m.Group, m.Permission, m.Session, m.LogEntry, m.Meta = Base, User, Group, Permission, Session, LogEntry, Meta
     m.UserChange = UserChange
+    # `_meta` con las mismas app_label que Django (auth, sessions, admin): un router escrito para Django
+    # que mire model._meta.app_label funciona igual.
+    for cls, app_label, model_name in (
+        (User, "auth", "user"),
+        (Group, "auth", "group"),
+        (Permission, "auth", "permission"),
+        (UserChange, "auth", "userchange"),
+        (Meta, "auth", "meta"),
+        (Session, "sessions", "session"),
+        (LogEntry, "admin", "logentry"),
+    ):
+        cls._meta = ModelMeta(app_label=app_label, model_name=model_name, db_table=cls.__tablename__)
+    m.all = (User, Group, Permission, Session, LogEntry, UserChange, Meta)
     if empty_string_is_null:
-        _allow_empty_strings(Base)
+        allow_empty_strings_as_null(Base)
     return m
 
 
-def _allow_empty_strings(base: Any) -> None:
+def allow_empty_strings_as_null(base: Any) -> None:
     """Oracle guarda `''` como NULL. Como hace Django con Oracle, los textos cuyo valor por defecto es
     `''` admiten NULL en la tabla, y al leerlos NULL vuelve a ser `''`: el resto del código ve lo mismo
     en todos los motores. Incluye las columnas propias del usuario (`user_mixin`)."""

@@ -48,6 +48,11 @@ class AuthSettings:
     # Alternativa con el formato de DATABASES["default"] de Django (tiene prioridad sobre database_url):
     # {"ENGINE": "postgresql", "NAME": …, "USER": …, "PASSWORD": …, "HOST": …, "PORT": …}
     database: dict[str, Any] | None = None
+    # Varias bases (DATABASES de Django): {"default": {...}, "replica": {...}, "ventas": "postgresql://…"}.
+    # Cada alias acepta además CONN_MAX_AGE y READ_ONLY. Tiene prioridad sobre database y database_url.
+    databases: dict[str, Any] | None = None
+    # Routers (DATABASE_ROUTERS de Django): rutas "paquete.modulo.Clase", clases o instancias. Ver djauth.routers.
+    database_routers: tuple[Any, ...] = ()
     # Segundos antes de renovar una conexión del pool (como CONN_MAX_AGE): evita conexiones viejas.
     database_conn_max_age: int = 1800
     table_prefix: str = "auth_"

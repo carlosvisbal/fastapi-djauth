@@ -6,6 +6,8 @@
 |---|---|
 | `django.contrib.auth` | `AuthKit(AuthSettings(...)).init()` + `kit.install(app)` |
 | `DATABASES["default"]` | `AuthSettings(database={...})` (mismo formato) |
+| `DATABASES` con varios alias | `AuthSettings(databases={...})`. [Guía](17-varias-bases-y-routers.md). |
+| `DATABASE_ROUTERS` | `AuthSettings(database_routers=[...])`: mismos métodos, y los routers de Django funcionan tal cual |
 | `USERNAME_FIELD = "email"` | `AuthSettings(username_field="email")` |
 | `AUTHENTICATION_BACKENDS` | `AuthSettings(authentication_backends=(...))` |
 | `AbstractUser` / `AUTH_USER_MODEL` | `AuthSettings(user_mixin=MiPerfil)` |

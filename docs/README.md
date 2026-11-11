@@ -20,3 +20,4 @@ Guías cortas, con el ejemplo primero. Si viene de Django, empiece por [Desde Dj
 | 14 | [Historial de cambios del usuario](14-historial-de-cambios.md) | Quién cambió qué dato, de qué valor a cuál, cuándo y por qué |
 | 15 | [Bases de datos](15-bases-de-datos.md) | Conectar SQLite, PostgreSQL, MySQL, Oracle o SQL Server, y en qué se diferencian |
 | 16 | [Proyecto nuevo](16-nuevo-proyecto.md) | `djauth startproject`: una aplicación FastAPI completa con djauth integrado |
+| 17 | [Varias bases y routers](17-varias-bases-y-routers.md) | `DATABASES` y `DATABASE_ROUTERS`: réplicas, varias bases y motores en un proyecto |

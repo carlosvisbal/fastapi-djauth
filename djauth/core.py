@@ -13,23 +13,20 @@ import secrets
 import threading
 import time
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from inspect import signature as inspect_signature
-from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, delete, func, inspect, make_url, or_, select, text
+from sqlalchemy import delete, func, inspect, or_, select, text
 from sqlalchemy.orm import Session as OrmSession
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from djauth import hashers
 from djauth.backends import AuthRequest, BaseBackend, load_backend
-from djauth.database import check_sync_driver, url_from_django
+from djauth.database import DatabaseConfigError
 from djauth.errors import (
     InvalidCredentialsError,
     NotFoundError,
@@ -38,7 +35,8 @@ from djauth.errors import (
     ValidationError,
 )
 from djauth.fields import UserField, to_json, user_fields
-from djauth.models import build_models
+from djauth.models import allow_empty_strings_as_null, build_models
+from djauth.routers import Databases
 from djauth.settings import AuthSettings
 from djauth.validators import normalize_email, validate_password, validate_username
 
@@ -161,12 +159,26 @@ SERVICE_USER = AuthUser(id=0, username="api-key", is_superuser=True, is_service=
 class AuthKit:
     def __init__(self, settings: AuthSettings | None = None) -> None:
         self.settings = settings or AuthSettings()
-        url = check_sync_driver(
-            url_from_django(self.settings.database) if self.settings.database else make_url(self.settings.database_url)
-        )
-        self.models = build_models(
-            self.settings.table_prefix, self.settings.user_mixin, empty_string_is_null=url.get_backend_name() == "oracle"
-        )
+        s = self.settings
+        # Una o varias bases (DATABASES) y sus routers (DATABASE_ROUTERS). Ver djauth.routers.
+        config = s.databases or {"default": s.database or s.database_url}
+        self.databases = Databases(config, s.database_routers, conn_max_age=s.database_conn_max_age)
+        self.models = build_models(s.table_prefix, s.user_mixin)
+        self.databases.register(self.models.Base.metadata, self.models.all)
+        # Todas las tablas de djauth se escriben en una sola base: así un cambio y su historial se
+        # guardan juntos (atómicos) y las relaciones usuario–grupo–permiso son posibles.
+        write_aliases = {self.databases.write_alias(m): m for m in self.models.all}
+        if len(write_aliases) > 1:
+            detail = ", ".join(f"{m._meta.model_name} → {a!r}" for a, m in write_aliases.items())
+            raise DatabaseConfigError(
+                f"Las tablas de djauth deben escribirse en una sola base, pero el router las reparte ({detail}).",
+                hint="Haga que db_for_write devuelva la misma base para app_label auth, sessions y admin. "
+                "Las lecturas sí pueden ir a réplicas.",
+            )
+        self.db_alias: str = next(iter(write_aliases))
+        self.databases.check_relations(self.models.all)
+        if self.databases.urls[self.db_alias].get_backend_name() == "oracle":
+            allow_empty_strings_as_null(self.models.Base)  # Oracle guarda '' como NULL
         self.custom_fields: tuple[UserField, ...] = user_fields(self.models.User)
         if self.settings.username_field not in ("username", "email"):
             raise ValueError(f'username_field debe ser "username" o "email" (recibido: {self.settings.username_field!r})')
@@ -181,18 +193,7 @@ class AuthKit:
         self.backends: list[tuple[str, BaseBackend]] = [load_backend(b) for b in self.settings.authentication_backends]
         for _, backend in self.backends:
             backend.kit = self
-        kwargs: dict[str, Any] = {"pool_pre_ping": True}  # descarta conexiones cortadas por el servidor
-        if url.get_backend_name() == "sqlite":
-            database = url.database or ""
-            if database and database != ":memory:":
-                Path(database).parent.mkdir(parents=True, exist_ok=True)
-            kwargs["connect_args"] = {"check_same_thread": False}
-            if not database or database == ":memory:":
-                kwargs["poolclass"] = StaticPool  # una sola conexión: la base en memoria no se pierde
-        else:
-            kwargs["pool_recycle"] = self.settings.database_conn_max_age
-        self.engine = create_engine(url, **kwargs)
-        self._session_factory = sessionmaker(self.engine, expire_on_commit=False)
+        self.engine = self.databases.engine(self.db_alias)  # base donde viven las tablas de djauth
         self._initialized = False
         self._registry: dict[str, dict[str, str]] = {a: dict(p) for a, p in BUILTIN_PERMISSIONS.items()}
         for app_label, perms in self.settings.permissions.items():
@@ -211,7 +212,7 @@ class AuthKit:
 
     def init(self) -> AuthKit:
         """Crea las tablas que falten, sincroniza los permisos declarados y el superusuario inicial."""
-        self.models.Base.metadata.create_all(self.engine)
+        self.databases.create_tables(self.models.Base.metadata, aliases=[self.db_alias], default_allowed=[self.db_alias])
         self._upgrade_schema()
         if self.email_login:
             self._ensure_unique_email_index()
@@ -279,8 +280,12 @@ class AuthKit:
             )
 
     @contextmanager
-    def _db(self):
-        with self._session_factory() as db:
+    def _db(self, *, read: bool = False) -> Iterator[OrmSession]:
+        """Sesión de base de datos. Por defecto, de escritura: todo va a la base de escritura (la
+        primaria), también las lecturas, así que nunca se modifica ni se valida (contraseñas, sesiones,
+        tokens) un dato leído de una réplica atrasada. `read=True` solo en consultas de consulta pura
+        (listados de la administración), que el router puede enviar a una réplica."""
+        with self.databases.session(write=not read) as db:
             yield db
 
     def _sync_permissions(self) -> None:
@@ -479,7 +484,7 @@ class AuthKit:
             stmt = stmt.where(H.changed_at >= since)
         if until is not None:
             stmt = stmt.where(H.changed_at <= until)
-        with self._db() as db:
+        with self._db(read=True) as db:
             total = db.scalar(select(func.count()).select_from(stmt.subquery()))
             rows = db.scalars(stmt.order_by(H.id.desc()).limit(limit).offset(offset))
             return [
@@ -683,7 +688,7 @@ class AuthKit:
         return user
 
     def get_user(self, user_id: int) -> dict[str, Any]:
-        with self._db() as db:
+        with self._db(read=True) as db:
             return self._user_dict(self._get_user(db, user_id))
 
     def get_by_username(self, username: str) -> AuthUser | None:
@@ -737,7 +742,7 @@ class AuthKit:
             }
             else U.username
         )
-        with self._db() as db:
+        with self._db(read=True) as db:
             total = db.scalar(select(func.count()).select_from(stmt.subquery()))
             rows = db.scalars(stmt.order_by(column.desc() if desc else column.asc(), U.id).limit(limit).offset(offset))
             return [self._user_dict(u) for u in rows], int(total or 0)
@@ -1132,13 +1137,13 @@ class AuthKit:
 
     def count_sessions(self, user_id: int) -> int:
         S = self.models.Session
-        with self._db() as db:
+        with self._db(read=True) as db:
             return int(db.scalar(select(func.count()).select_from(S).where(S.user_id == user_id, S.expires >= now())) or 0)
 
     # ================================================================== grupos (roles)
     def list_groups(self) -> list[dict[str, Any]]:
         G, U = self.models.Group, self.models.User
-        with self._db() as db:
+        with self._db(read=True) as db:
             out = []
             for g in db.scalars(select(G).order_by(G.name)):
                 members = db.scalar(select(func.count()).select_from(U).where(U.groups.any(G.id == g.id)))
@@ -1152,7 +1157,7 @@ class AuthKit:
         return group
 
     def get_group(self, group_id: int) -> dict[str, Any]:
-        with self._db() as db:
+        with self._db(read=True) as db:
             return self._group_dict(self._get_group(db, group_id))
 
     def _group_name(self, db: OrmSession, name: str, exclude: int | None = None) -> str:
@@ -1234,7 +1239,7 @@ class AuthKit:
     # ================================================================== permisos y registro
     def list_permissions(self) -> list[dict[str, Any]]:
         P = self.models.Permission
-        with self._db() as db:
+        with self._db(read=True) as db:
             return [
                 {"id": p.id, "app_label": p.app_label, "codename": p.codename, "name": p.name, "key": p.key}
                 for p in db.scalars(select(P).order_by(P.app_label, P.codename))
@@ -1249,7 +1254,7 @@ class AuthKit:
             stmt = stmt.where(L.object_type == object_type)
         if object_id:
             stmt = stmt.where(L.object_id == str(object_id))
-        with self._db() as db:
+        with self._db(read=True) as db:
             total = db.scalar(select(func.count()).select_from(stmt.subquery()))
             rows = db.scalars(stmt.order_by(L.id.desc()).limit(limit).offset(offset))
             return [

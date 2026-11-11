@@ -36,6 +36,7 @@ kit.install(app)   # API en /auth/api y páginas: /auth/login, /auth/admin, /aut
 - **Seguro por defecto:** contraseñas PBKDF2-SHA256, bloqueo por fuerza bruta, CSRF, protección de WebSocket, sin escalada de privilegios entre administradores, cabeceras de seguridad.
 - **Errores descriptivos:** cada error trae mensaje, código fijo, campo afectado y cómo resolverlo.
 - **Cualquier base:** SQLite, PostgreSQL, MySQL/MariaDB, Oracle o SQL Server (SQLAlchemy 2), probadas contra servidores reales en cada cambio.
+- **Varias bases y routers:** `databases` y `database_routers`, como `DATABASES` y `DATABASE_ROUTERS` de Django: réplicas de lectura o una base por área, también para sus propios modelos.
 - **Plantilla de proyecto:** `djauth startproject` crea una aplicación nueva lista para producción.
 
 ## Proyecto nuevo en un minuto
@@ -63,7 +64,7 @@ Requiere Python 3.11+.
 |---|---|
 | **Empezar** | [Proyecto nuevo](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/16-nuevo-proyecto.md) · [Instalación y primer uso](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/01-instalacion.md) · [Configuración](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/02-configuracion.md) · [Bases de datos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/15-bases-de-datos.md) · [Desde Django](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/13-desde-django.md) |
 | **Usar** | [Proteger rutas](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/03-proteger-rutas.md) · [Sesión o Bearer](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/04-sesion-y-bearer.md) · [Usuarios, grupos y permisos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/05-usuarios-grupos-permisos.md) |
-| **Personalizar** | [Backends de autenticación](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/06-backends.md) · [Extender el usuario](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/07-extender-usuario.md) |
+| **Personalizar** | [Varias bases y routers](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/17-varias-bases-y-routers.md) · [Backends de autenticación](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/06-backends.md) · [Extender el usuario](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/07-extender-usuario.md) |
 | **Operar** | [Administración web](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/08-administracion.md) · [Historial de cambios](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/14-historial-de-cambios.md) · [Comandos](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/11-comandos.md) · [Seguridad](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/10-seguridad.md) |
 | **Referencia** | [API REST](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/12-api.md) · [Errores](https://github.com/carlosvisbal/fastapi-djauth/blob/main/docs/09-errores.md) · [Cambios](https://github.com/carlosvisbal/fastapi-djauth/blob/main/CHANGELOG.md) |
 

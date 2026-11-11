@@ -35,6 +35,8 @@ AuthSettings(database_url="postgresql+psycopg://app:clave@localhost:5432/miapp")
 | `database` | `None` | Diccionario con `ENGINE`, `NAME`, `USER`, `PASSWORD`, `HOST`, `PORT` y `OPTIONS`. Tiene prioridad sobre `database_url`. |
 | `database_url` | `sqlite:///auth.sqlite3` | URL de SQLAlchemy. |
 | `database_conn_max_age` | 1800 | Segundos antes de renovar una conexión del pool. |
+| `databases` | `None` | Varias bases con alias (`DATABASES` de Django). Tiene prioridad sobre las dos anteriores. [Guía](17-varias-bases-y-routers.md). |
+| `database_routers` | `()` | Routers que deciden la base de cada modelo (`DATABASE_ROUTERS`). [Guía](17-varias-bases-y-routers.md). |
 | `table_prefix` | `auth_` | Prefijo de las tablas (`auth_user`, `auth_group`…). |
 
 **Motores** (`ENGINE`): `postgresql` (también PostGIS), `mysql` (también MariaDB), `sqlite`, `oracle` y `mssql`. También acepta los nombres de Django (`django.db.backends.postgresql`…), para copiar una configuración existente.

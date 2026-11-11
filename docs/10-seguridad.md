@@ -26,7 +26,8 @@
 | Redirección abierta | `?next=` solo acepta rutas del mismo sitio. |
 | Fuga del enlace de restablecimiento | Va en el fragmento (`#`): no llega al servidor ni a los logs. Un solo uso, caduca, `Referrer-Policy: no-referrer`. |
 | Abuso de CPU | Contraseñas de más de `password_max_length` se rechazan sin cifrar. |
-| Trazabilidad | Registro de acciones: quién creó, cambió o eliminó qué, inicios de sesión y cambios de contraseña. |
+| Trazabilidad | Registro de acciones: quién creó, cambió o eliminó qué, inicios de sesión y cambios de contraseña. Historial de cambios de cada usuario, campo por campo. |
+| Réplicas atrasadas (varias bases) | Contraseñas, sesiones y tokens se validan siempre en la base de escritura; ninguna base `READ_ONLY` recibe escrituras. [Guía](17-varias-bases-y-routers.md#seguros). |
 
 ## Límites que debe conocer
 

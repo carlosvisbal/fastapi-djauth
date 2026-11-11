@@ -68,3 +68,55 @@ def test_new_custom_column_is_added_to_existing_table(url_prefix):
     assert beto.telefono == ""
     kit.update_user(beto.id, {"telefono": "3001234567"})
     assert kit.get_user(beto.id)["telefono"] == "3001234567"
+
+
+@pytest.mark.skipif(len(URLS) < 2, reason="hacen falta dos motores en DJAUTH_TEST_DATABASE_URLS")
+def test_one_project_two_real_engines():
+    """djauth en el primer motor y los modelos de la aplicación en el segundo, con una sola sesión."""
+    from sqlalchemy import Integer, select
+    from sqlalchemy.orm import DeclarativeBase
+
+    from djauth import BaseRouter
+
+    class Base(DeclarativeBase):
+        pass
+
+    class Pedido(Base):
+        __tablename__ = f"p{uuid.uuid4().hex[:8]}_pedido"
+        __app_label__ = "ventas"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        cliente: Mapped[str] = mapped_column(String(100))
+
+    class VentasRouter(BaseRouter):
+        def db_for_read(self, model, **hints):
+            return "ventas" if model._meta.app_label == "ventas" else None
+
+        db_for_write = db_for_read
+
+        def allow_migrate(self, db, app_label, model_name=None, **hints):
+            return db == "ventas" if app_label == "ventas" else None
+
+    prefix = f"t{uuid.uuid4().hex[:8]}_"
+    kit = kit_for_databases({"default": URLS[0], "ventas": URLS[1]}, prefix, routers=[VentasRouter()])
+    try:
+        kit.create_user("ana", PWD)
+        kit.databases.register(Base.metadata, [Pedido])
+        assert kit.databases.create_tables(Base.metadata) == {"ventas": [Pedido.__tablename__]}
+        with kit.databases.atomic() as session:
+            session.add(Pedido(cliente="Acme"))
+        with kit.databases.session() as session:
+            assert session.scalar(select(Pedido.cliente)) == "Acme"
+        # Cada tabla está en su motor y solo en él.
+        assert Pedido.__tablename__ in inspect(kit.databases.engine("ventas")).get_table_names()
+        assert Pedido.__tablename__ not in inspect(kit.databases.engine("default")).get_table_names()
+        assert f"{prefix}user" in inspect(kit.databases.engine("default")).get_table_names()
+    finally:
+        Base.metadata.drop_all(kit.databases.engine("ventas"))
+        kit.models.Base.metadata.drop_all(kit.databases.engine("default"))
+        kit.databases.dispose()
+
+
+def kit_for_databases(databases: dict, prefix: str, routers=()) -> AuthKit:
+    return AuthKit(
+        AuthSettings(databases=databases, database_routers=tuple(routers), table_prefix=prefix, password_iterations=1000)
+    ).init()

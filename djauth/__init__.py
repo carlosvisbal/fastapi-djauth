@@ -32,9 +32,10 @@ from djauth.errors import (
     ValidationError,
 )
 from djauth.hashers import check_password, make_password
+from djauth.routers import BaseRouter, Databases, ModelMeta, RoutingSession, model_meta
 from djauth.settings import AuthSettings, ExtraField
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 
 __all__ = [
     "SERVICE_USER",
@@ -46,13 +47,17 @@ __all__ = [
     "AuthSettings",
     "AuthUser",
     "BaseBackend",
+    "BaseRouter",
     "DatabaseConfigError",
+    "Databases",
     "ExtraField",
     "InvalidCredentialsError",
     "ModelBackend",
+    "ModelMeta",
     "NotAuthenticatedError",
     "NotFoundError",
     "PermissionDeniedError",
+    "RoutingSession",
     "Rule",
     "TooManyAttemptsError",
     "ValidationError",
@@ -62,6 +67,7 @@ __all__ = [
     "identify",
     "login_required",
     "make_password",
+    "model_meta",
     "optional_user",
     "permission_required",
     "require_perm",

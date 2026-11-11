@@ -2,7 +2,7 @@
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
-## [1.3.1] - 2026-11-11
+## [1.4.0] - 2026-11-11
 
 Primera versión publicada en PyPI.
 
@@ -18,6 +18,8 @@ Primera versión publicada en PyPI.
 - Nuevos extras `mssql` (`pymssql`, sin dependencias del sistema) y `oracle` en las pistas de instalación.
 
 ### Añadido
+- **Varias bases de datos y routers**, como `DATABASES` y `DATABASE_ROUTERS` de Django: `databases={...}` con alias, `database_routers=[...]` con `db_for_read`, `db_for_write`, `allow_relation` y `allow_migrate`, y `model._meta` con las mismas `app_label` de Django (los routers de Django funcionan tal cual). Sirve también para los modelos de la aplicación (`kit.databases`, `Databases`, `RoutingSession`). Ver [la guía](docs/17-varias-bases-y-routers.md).
+- Seguros de las varias bases: alias `READ_ONLY` que nunca reciben escrituras; contraseñas, sesiones y tokens validados siempre en la base de escritura; lectura y escritura en la misma base dentro de una sesión de escritura; claves foráneas entre bases y alias desconocidos rechazados al arrancar; `allow_relation` comprobado antes de guardar.
 - Guía de [bases de datos](docs/15-bases-de-datos.md): conexión y particularidades de cada motor.
 - CI con Python 3.11 a 3.14 en Linux, Windows y macOS, versiones mínimas de las dependencias, PostgreSQL, MySQL, Oracle y SQL Server reales, `mypy`, `bandit` y `pip-audit`.
 - `djauth startproject`: crea un proyecto FastAPI nuevo con arquitectura por capas, djauth integrado, Alembic, Docker, pruebas y CI; con las versiones probadas o las últimas. Ver [Nuevo proyecto](docs/16-nuevo-proyecto.md).

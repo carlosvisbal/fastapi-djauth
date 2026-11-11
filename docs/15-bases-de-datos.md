@@ -1,6 +1,6 @@
 # 15. Bases de datos: conexión por motor
 
-Cómo conectar fastapi-djauth a cada motor, qué instalar, qué opciones sirven y en qué se diferencian. La configuración general está en [Configuración](02-configuracion.md#base-de-datos).
+Cómo conectar fastapi-djauth a cada motor, qué instalar, qué opciones sirven y en qué se diferencian. La configuración general está en [Configuración](02-configuracion.md#base-de-datos). Para usar varias bases a la vez (réplicas, una base por área), vea [Varias bases y routers](17-varias-bases-y-routers.md).
 
 ## Elegir un motor
 
