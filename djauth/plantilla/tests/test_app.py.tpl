@@ -19,7 +19,7 @@ def test_crud(admin: TestClient) -> None:
     pid = creado.json()["id"]
     assert admin.post("/api/v1/productos", json=PRODUCTO).status_code == 409  # código repetido
     assert admin.patch(f"/api/v1/productos/{pid}", json={"stock": 7}).json()["stock"] == 7
-    pagina = admin.get("/api/v1/productos", params={"q": "templado"}).json()
+    pagina = admin.get("/api/v1/productos", params={"q": "ejemplo"}).json()
     assert pagina["total"] == 1
     assert admin.delete(f"/api/v1/productos/{pid}").status_code == 204
     assert admin.get(f"/api/v1/productos/{pid}").status_code == 404
