@@ -47,14 +47,16 @@ def main(argv: list[str] | None = None) -> int:
     kit = AuthKit(AuthSettings(database_url=args.db, table_prefix=args.prefix)).init()
     try:
         if args.command == "createsuperuser":
-            user = kit.create_superuser(args.username, _ask_password(), email=args.email)
+            user = kit.create_superuser(
+                args.username, _ask_password(), email=args.email, reason="Creado con djauth createsuperuser."
+            )
             print(f"Superusuario {user['username']} creado.")
         elif args.command == "changepassword":
             user = kit.get_by_username(args.username)
             if user is None:
                 print(f"No existe el usuario {args.username}.", file=sys.stderr)
                 return 1
-            kit.set_password(user.id, _ask_password())
+            kit.set_password(user.id, _ask_password(), reason="Cambiada con djauth changepassword.")
             print(f"Contraseña de {user.username} cambiada; sus sesiones abiertas se cerraron.")
         elif args.command == "listusers":
             items, total = kit.list_users(limit=1000)

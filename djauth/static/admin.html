@@ -13,6 +13,7 @@
       <button role="tab" data-tab="users" aria-selected="true">Usuarios</button>
       <button role="tab" data-tab="groups">Grupos y roles</button>
       <button role="tab" data-tab="perms">Permisos</button>
+      <button role="tab" data-tab="history">Cambios de usuarios</button>
       <button role="tab" data-tab="log">Registro</button>
     </nav>
     <div class="who"><a class="btn ghost" id="home">← Volver al sitio</a><a class="btn ghost" href="account" id="who"></a><button class="btn" id="logout">Cerrar sesión</button></div>
@@ -84,12 +85,15 @@
               <p class="inherited" id="ue-inherited"></p>
             </section>
           </div>
+          <label class="field reason">Motivo del cambio (opcional) <input type="text" id="ue-reason" maxlength="255" placeholder="Ej.: cambio de área, solicitud de su jefe">
+            <span class="help">Queda en el historial de cambios del usuario junto con quién lo hizo y desde qué IP.</span></label>
           <div class="actions">
             <button class="btn primary" type="submit" id="ue-save">Guardar</button>
             <button class="btn" type="button" id="ue-reset-link">Enlace para nueva contraseña</button>
             <button class="btn" type="button" id="ue-setpass">Asignar contraseña</button>
             <button class="btn" type="button" id="ue-logout">Cerrar sus sesiones</button>
-            <button class="btn" type="button" id="ue-history">Ver su historial</button>
+            <button class="btn" type="button" id="ue-changes">Historial de cambios</button>
+            <button class="btn" type="button" id="ue-history">Ver su actividad</button>
             <button class="btn danger" type="button" id="ue-delete">Eliminar</button>
           </div>
           <p class="msg" id="ue-msg" role="status"></p>
@@ -130,6 +134,21 @@
         <h2>Permisos disponibles</h2>
         <p class="muted">Los declara la aplicación en su código; aquí se asignan a grupos o a usuarios.</p>
         <div class="table-wrap"><table><thead><tr><th>Aplicación</th><th>Código</th><th>Descripción</th></tr></thead><tbody id="p-rows"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ========================================================== CAMBIOS DE USUARIOS -->
+    <section id="tab-history" hidden>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Historial de cambios de usuarios</h2>
+          <select id="h-action" aria-label="Acción"><option value="">Todas las acciones</option><option value="create">Altas</option><option value="update">Modificaciones</option><option value="password">Contraseñas</option><option value="delete">Eliminaciones</option></select>
+          <select id="h-field" aria-label="Campo"><option value="">Todos los campos</option></select>
+          <span class="chip muted" id="h-filter"></span><button class="btn ghost" id="h-clear" hidden>Todos los usuarios</button>
+        </div>
+        <p class="muted small">Solo cambios de los datos del usuario: valor anterior y nuevo de cada campo. Las contraseñas nunca se guardan. Se conserva aunque el usuario se elimine.</p>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Cambios</th><th>Quién</th><th>Motivo · IP</th></tr></thead><tbody id="h-rows"></tbody></table></div>
+        <div class="pager"><button class="btn ghost" id="h-prev">← Más recientes</button><span class="muted" id="h-page"></span><button class="btn ghost" id="h-next">Más antiguos →</button></div>
       </div>
     </section>
 

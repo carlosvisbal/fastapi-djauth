@@ -17,3 +17,4 @@ Guías cortas, con el ejemplo primero. Si viene de Django, empiece por [Desde Dj
 | 11 | [Comandos](11-comandos.md) | `createsuperuser`, `changepassword`, `listusers` |
 | 12 | [API REST](12-api.md) | Todas las rutas |
 | 13 | [Desde Django](13-desde-django.md) | Equivalencias e importar usuarios con su contraseña |
+| 14 | [Historial de cambios del usuario](14-historial-de-cambios.md) | Quién cambió qué dato, de qué valor a cuál, cuándo y por qué |

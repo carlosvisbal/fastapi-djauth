@@ -90,3 +90,10 @@ tbody tr.clickable:hover { background: var(--surface-2); }
 .auth-card .brand { margin-bottom: 18px; }
 .auth-card form { display: flex; flex-direction: column; gap: 12px; }
 .auth-card .btn.primary { justify-content: center; padding: 10px; }
+
+/* Historial de cambios de usuarios */
+ul.changes { margin: 0; padding-left: 16px; }
+ul.changes li { margin: 1px 0; }
+ul.changes del { color: var(--bad); text-decoration: line-through; }
+ul.changes ins { color: var(--ok); text-decoration: none; font-weight: 600; }
+label.field.reason { margin-top: 12px; max-width: 560px; }

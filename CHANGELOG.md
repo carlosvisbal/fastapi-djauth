@@ -2,6 +2,19 @@
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.3.0] - 2026-11-11
+
+### Añadido
+- **Historial de cambios del usuario** (tabla `auth_user_history`): cada alta, modificación (valor anterior y nuevo por campo), cambio de contraseña (sin valores) y eliminación, con quién lo hizo, cuándo, desde qué IP y el motivo. Se guarda en la misma transacción que el cambio y se conserva al eliminar el usuario. Solo cambios del usuario: inicios de sesión y demás acciones siguen en el registro general.
+- Rutas `GET /auth/api/user-history` y `GET /auth/api/users/{id}/history`, método `kit.user_history()` y permiso `auth.view_userchange`.
+- Motivo del cambio: `?reason=` en la API, `reason=` en `create_user`, `update_user`, `delete_user` y `set_password`, y un campo en el formulario de la administración.
+- Pestaña *Cambios de usuarios* en la administración.
+- Campos sensibles: `info={"sensitive": True}` en columnas propias y `ExtraField(..., sensitive=True)` registran que cambiaron, sin los valores.
+- Opción `user_history` para desactivarlo.
+
+### Cambiado
+- Los mensajes de error de la conexión a la base sugieren los nombres cortos de motor (`postgresql`, `mysql`…).
+
 ## [1.2.0] - 2026-11-10
 
 ### Añadido

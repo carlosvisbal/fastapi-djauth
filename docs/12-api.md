@@ -36,6 +36,10 @@ Todas bajo `/auth/api` (o el prefijo que pase a `install`). La documentación in
 | GET, PATCH, DELETE | `/groups/{id}` | `auth.view_group` / `change_group` / `delete_group` | Grupo |
 | GET | `/permissions` | personal | Permisos disponibles (con su `id`) |
 | GET | `/log?object_type=&object_id=&limit=&offset=` | `auth.view_logentry` | Registro de acciones |
+| GET | `/user-history?user_id=&actor_id=&action=&field=&since=&until=&limit=&offset=` | `auth.view_userchange` | [Historial de cambios del usuario](14-historial-de-cambios.md) (incluye eliminados) |
+| GET | `/users/{id}/history?action=&field=&limit=&offset=` | `auth.view_userchange` | Historial de un usuario |
+
+`POST /users`, `PATCH /users/{id}`, `DELETE /users/{id}` y `POST /users/{id}/password` aceptan `?reason=` (hasta 255 caracteres): el motivo queda en el historial de cambios.
 
 ### Usuario (respuesta)
 

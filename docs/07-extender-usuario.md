@@ -42,6 +42,7 @@ Listo: las columnas existen en la tabla, se aceptan en la API (`POST/PATCH /auth
 | `choices` | Lista de valores permitidos (se muestra como lista desplegable). |
 | `required` | Obligatorio al crear (por defecto: si la columna no admite nulos y no tiene valor por defecto). |
 | `editable` | `False` = solo lectura en la API y la administración (se llena por código). |
+| `sensitive` | `True` = el [historial de cambios](14-historial-de-cambios.md) anota que cambió, sin guardar los valores (cédula, salario…). |
 
 ### Tipos que entiende el formulario
 
@@ -63,7 +64,7 @@ AuthSettings(extra_fields=(
 ))
 ```
 
-Tipos: `text`, `number`, `bool`, `choice`. Se envían en la API dentro de `"extra": {...}`.
+Tipos: `text`, `number`, `bool`, `choice`. Se envían en la API dentro de `"extra": {...}`. Con `sensitive=True`, el [historial de cambios](14-historial-de-cambios.md) no guarda sus valores.
 
 ## Desde código
 

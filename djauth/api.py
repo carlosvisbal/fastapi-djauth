@@ -16,6 +16,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import parse_qs, quote, urlsplit
@@ -30,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import HTTPConnection
 
-from djauth.core import SERVICE_USER, AuthKit, AuthUser
+from djauth.core import HISTORY_ACTIONS, SERVICE_USER, AuthKit, AuthUser, request_ip
 from djauth.errors import (
     AuthError,
     NotAuthenticatedError,
@@ -485,12 +486,17 @@ class _AuthRoute(APIRoute):
         handler = super().get_route_handler()
 
         async def wrapped(request: Request) -> Response:
+            # La IP queda disponible para el historial de cambios (se copia al hilo de la ruta).
+            kit = getattr(request.app.state, "djauth", None)
+            ip_token = request_ip.set(_client_ip(request, kit) if kit is not None else "")
             try:
                 response = await handler(request)
             except AuthError as exc:
                 return error_response(exc)
             except RequestValidationError as exc:
                 return error_response(translate_validation(exc))
+            finally:
+                request_ip.reset(ip_token)
             for name, value in API_HEADERS.items():
                 response.headers.setdefault(name, value)
             return response
@@ -523,6 +529,9 @@ def build_router(kit: AuthKit) -> APIRouter:
             return user
 
         return dependency
+
+    # Motivo opcional de un cambio de usuario: queda en el historial (`?reason=Cambio de área`).
+    Reason = Annotated[str, Query(max_length=255, description="Motivo del cambio, para el historial")]
 
     def set_cookie(response: Response, token: str, request: Request) -> None:
         # Secure siempre que la petición llegue por HTTPS, aunque no se haya configurado.
@@ -672,14 +681,16 @@ def build_router(kit: AuthKit) -> APIRouter:
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     @router.post("/users", status_code=201, summary="Crear un usuario")
-    def create_user(body: UserCreateIn, actor: Annotated[AuthUser, Depends(staff("auth.add_user"))]) -> dict[str, Any]:
+    def create_user(
+        body: UserCreateIn, actor: Annotated[AuthUser, Depends(staff("auth.add_user"))], reason: Reason = ""
+    ) -> dict[str, Any]:
         data = body.model_dump()
         custom = {f.name for f in kit.custom_fields}
         fields = {k: data.pop(k) for k in list(data) if k in custom}
         unknown = sorted(set(body.model_extra or {}) - custom)
         if unknown:
             raise ValidationError({k: ["Campo desconocido."] for k in unknown})
-        return kit.create_user(data.pop("username"), data.pop("password"), actor=actor, fields=fields, **data)
+        return kit.create_user(data.pop("username"), data.pop("password"), actor=actor, fields=fields, reason=reason, **data)
 
     @router.get("/users/{user_id}", summary="Detalle de un usuario")
     def get_user(user_id: int, _: Annotated[AuthUser, Depends(staff("auth.view_user"))]) -> dict[str, Any]:
@@ -687,23 +698,31 @@ def build_router(kit: AuthKit) -> APIRouter:
 
     @router.patch("/users/{user_id}", summary="Modificar un usuario")
     def update_user(
-        user_id: int, body: UserUpdateIn, actor: Annotated[AuthUser, Depends(staff("auth.change_user"))]
+        user_id: int,
+        body: UserUpdateIn,
+        actor: Annotated[AuthUser, Depends(staff("auth.change_user"))],
+        reason: Reason = "",
     ) -> dict[str, Any]:
         unknown = sorted(set(body.model_extra or {}) - {f.name for f in kit.custom_fields})
         if unknown:
             raise ValidationError({k: ["Campo desconocido."] for k in unknown})
-        return kit.update_user(user_id, body.model_dump(exclude_unset=True), actor=actor)
+        return kit.update_user(user_id, body.model_dump(exclude_unset=True), actor=actor, reason=reason)
 
     @router.delete("/users/{user_id}", status_code=204, summary="Eliminar un usuario")
-    def delete_user(user_id: int, actor: Annotated[AuthUser, Depends(staff("auth.delete_user"))]) -> Response:
-        kit.delete_user(user_id, actor=actor)
+    def delete_user(
+        user_id: int, actor: Annotated[AuthUser, Depends(staff("auth.delete_user"))], reason: Reason = ""
+    ) -> Response:
+        kit.delete_user(user_id, actor=actor, reason=reason)
         return Response(status_code=204)
 
     @router.post("/users/{user_id}/password", summary="Asignar una contraseña a un usuario")
     def set_user_password(
-        user_id: int, body: SetPasswordIn, actor: Annotated[AuthUser, Depends(staff("auth.change_user"))]
+        user_id: int,
+        body: SetPasswordIn,
+        actor: Annotated[AuthUser, Depends(staff("auth.change_user"))],
+        reason: Reason = "",
     ) -> dict[str, bool]:
-        kit.set_password(user_id, body.password, actor=actor)
+        kit.set_password(user_id, body.password, actor=actor, reason=reason)
         return {"ok": True}
 
     @router.post("/users/{user_id}/reset-link", summary="Generar un enlace para que el usuario fije su contraseña")
@@ -763,6 +782,41 @@ def build_router(kit: AuthKit) -> APIRouter:
         offset: Annotated[int, Query(ge=0)] = 0,
     ) -> dict[str, Any]:
         items, total = kit.list_log(limit=limit, offset=offset, object_type=object_type, object_id=object_id)
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+    # ------------------------------------------------------------------ historial de cambios del usuario
+    CanSeeHistory = Annotated[AuthUser, Depends(staff("auth.view_userchange"))]
+    Action = Annotated[str | None, Query(pattern="^(" + "|".join(HISTORY_ACTIONS) + ")$")]
+    FieldName = Annotated[str | None, Query(max_length=100, description="Campo: email, groups, password, extra.telefono…")]
+
+    @router.get("/user-history", summary="Historial de cambios de los usuarios (incluye eliminados)")
+    def user_history(
+        _: CanSeeHistory,
+        user_id: int | None = None,
+        actor_id: int | None = None,
+        action: Action = None,
+        field: FieldName = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        items, total = kit.user_history(
+            user_id, actor_id=actor_id, action=action, field=field, since=since, until=until, limit=limit, offset=offset
+        )
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+    @router.get("/users/{user_id}/history", summary="Historial de cambios de un usuario")
+    def one_user_history(
+        user_id: int,
+        _: CanSeeHistory,
+        action: Action = None,
+        field: FieldName = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        # Sin 404 si el usuario ya no existe: su historial se conserva y se puede consultar.
+        items, total = kit.user_history(user_id, action=action, field=field, limit=limit, offset=offset)
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     return router

@@ -49,10 +49,10 @@ function showTab(name) {
   state.tab = name;
   for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === name));
   for (const s of document.querySelectorAll("main > section")) s.hidden = s.id !== `tab-${name}`;
-  ({ users: Users.list, groups: Groups.list, perms: Perms.list, log: Log.list })[name]();
+  ({ users: Users.list, groups: Groups.list, perms: Perms.list, history: History.list, log: Log.list })[name]();
 }
 for (const b of document.querySelectorAll(".tabs button")) {
-  const perm = { users: "auth.view_user", groups: "auth.view_group", log: "auth.view_logentry" }[b.dataset.tab];
+  const perm = { users: "auth.view_user", groups: "auth.view_group", history: "auth.view_userchange", log: "auth.view_logentry" }[b.dataset.tab];
   if (perm && !can(perm)) b.hidden = true;
   b.addEventListener("click", () => showTab(b.dataset.tab));
 }
@@ -155,6 +155,9 @@ const Users = (() => {
     for (const n of $("#ue-form").querySelectorAll("input, select, #ue-save")) if (n.id !== "ue-perm-q") n.disabled = n.disabled || readOnly;
     for (const b of ["#ue-reset-link", "#ue-setpass", "#ue-logout"]) $(b).hidden = !id || !can("auth.change_user");
     $("#ue-history").hidden = !id || !can("auth.view_logentry");
+    $("#ue-changes").hidden = !id || !can("auth.view_userchange");
+    $("#ue-reason").value = "";
+    $("#ue-reason").closest("label").hidden = readOnly;
     $("#ue-delete").hidden = !id || !can("auth.delete_user") || id === me.id;
   }
 
@@ -171,19 +174,24 @@ const Users = (() => {
     if (me.is_superuser) body.is_superuser = $("#ue-super").checked;
     try {
       if (editing) {
-        await api(`users/${editing.id}`, { method: "PATCH", body });
+        await api(`users/${editing.id}${reasonQuery()}`, { method: "PATCH", body });
         setMsg(msg, "Cambios guardados.", "ok");
         await edit(editing.id);
         setMsg(msg, "Cambios guardados.", "ok");
       } else {
         if ($("#ue-password").value !== $("#ue-password2").value) { setMsg(msg, "Las contraseñas no coinciden.", "error"); return; }
-        const created = await api("users", { method: "POST", body: { ...body, password: $("#ue-password").value || null } });
+        const created = await api(`users${reasonQuery()}`, { method: "POST", body: { ...body, password: $("#ue-password").value || null } });
         await edit(created.id);
         setMsg(msg, "Usuario creado.", "ok");
       }
     } catch (e) { showErrors($("#ue-form"), e); setMsg(msg, e.message, "error"); }
   });
 
+  /** `?reason=…` con el motivo escrito en el formulario (vacío = sin motivo). */
+  function reasonQuery() {
+    const reason = $("#ue-reason").value.trim();
+    return reason ? `?${new URLSearchParams({ reason })}` : "";
+  }
   async function action(fn, okText) {
     try { await fn(); setMsg($("#ue-msg"), okText, "ok"); } catch (e) { setMsg($("#ue-msg"), e.message, "error"); }
   }
@@ -197,13 +205,14 @@ const Users = (() => {
   }, "Enlace generado."));
   $("#ue-setpass").addEventListener("click", () => {
     const password = prompt(`Contraseña nueva para ${editing.username}:`);
-    if (password) action(() => api(`users/${editing.id}/password`, { method: "POST", body: { password } }), "Contraseña asignada; sus sesiones abiertas se cerraron.");
+    if (password) action(() => api(`users/${editing.id}/password${reasonQuery()}`, { method: "POST", body: { password } }), "Contraseña asignada; sus sesiones abiertas se cerraron.");
   });
   $("#ue-logout").addEventListener("click", () => action(() => api(`users/${editing.id}/logout`, { method: "POST" }), "Sesiones cerradas."));
   $("#ue-history").addEventListener("click", () => Log.forObject("user", editing.id, editing.username));
+  $("#ue-changes").addEventListener("click", () => History.forUser(editing.id, editing.username));
   $("#ue-delete").addEventListener("click", async () => {
     if (!confirm(`¿Eliminar a ${editing.username}? No se puede deshacer. Si solo quiere quitarle el acceso, desmarque "Activo".`)) return;
-    try { await api(`users/${editing.id}`, { method: "DELETE" }); list(); } catch (e) { setMsg($("#ue-msg"), e.message, "error"); }
+    try { await api(`users/${editing.id}${reasonQuery()}`, { method: "DELETE" }); list(); } catch (e) { setMsg($("#ue-msg"), e.message, "error"); }
   });
   return { list };
 })();
@@ -251,6 +260,60 @@ const Groups = (() => {
 
 // ====================================================================== permisos
 const Perms = { list: () => $("#p-rows").replaceChildren(...state.perms.map((p) => el("tr", {}, el("td", { text: p.app_label }), el("td", {}, el("code", { text: p.codename })), el("td", { text: p.name })))) };
+
+// ====================================================================== historial de cambios de usuarios
+const History = (() => {
+  const PAGE = 50;
+  const ACTION_TEXT = { create: "Alta", update: "Modificación", password: "Contraseña", delete: "Eliminación" };
+  const LABELS = {
+    username: "Usuario", email: "Correo", first_name: "Nombre", last_name: "Apellidos", is_active: "Activo",
+    is_staff: "Acceso a la administración", is_superuser: "Superusuario", groups: "Grupos", permissions: "Permisos", password: "Contraseña",
+    ...Object.fromEntries((cfg.user_fields || []).map((f) => [f.name, f.label])),
+    ...Object.fromEntries((cfg.extra_fields || []).map((f) => [`extra.${f.name}`, f.label])),
+  };
+  let offset = 0, total = 0, user = null;
+  $("#h-field").append(...Object.entries(LABELS).map(([value, text]) => el("option", { value, text })));
+
+  const show = (v) => (v === null || v === undefined || v === "" ? "—" : v === true ? "Sí" : v === false ? "No" : Array.isArray(v) ? (v.length ? v.join(", ") : "—") : String(v));
+  function changeList(action, changes) {
+    const items = Object.entries(changes).map(([name, c]) => {
+      const label = el("strong", { text: `${LABELS[name] ?? name}: ` });
+      if (c.hidden) {
+        const verb = { create: "definida", delete: "eliminada" }[action] ?? "cambiada";
+        return el("li", {}, label, name === "password" ? verb : `${action === "update" ? "cambió" : verb} (dato protegido)`);
+      }
+      if (action === "create") return el("li", {}, label, show(c.new));
+      if (action === "delete") return el("li", {}, label, show(c.old));
+      return el("li", {}, label, el("del", { text: show(c.old) }), " → ", el("ins", { text: show(c.new) }));
+    });
+    return el("ul", { class: "changes" }, ...items);
+  }
+  async function list() {
+    const q = new URLSearchParams({ limit: PAGE, offset });
+    if (user) q.set("user_id", user.id);
+    if ($("#h-action").value) q.set("action", $("#h-action").value);
+    if ($("#h-field").value) q.set("field", $("#h-field").value);
+    $("#h-filter").textContent = user ? `Solo: ${user.label}` : "";
+    $("#h-clear").hidden = !user;
+    try {
+      const r = await api(`user-history?${q}`);
+      total = r.total;
+      $("#h-rows").replaceChildren(...(r.items.length ? r.items.map((h) => el("tr", {},
+        el("td", { text: fmtDate(h.changed_at) }), el("td", { text: h.user }), el("td", {}, el("span", { class: `pill ${h.action === "delete" ? "no" : h.action === "create" ? "yes" : ""}`, text: ACTION_TEXT[h.action] ?? h.action })),
+        el("td", {}, changeList(h.action, h.changes)), el("td", { text: h.actor }),
+        el("td", { class: "small", text: [h.reason, h.ip].filter(Boolean).join(" · ") || "—" }))) : [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "Sin cambios registrados." }))]));
+      $("#h-page").textContent = total ? `${offset + 1}–${Math.min(offset + PAGE, total)} de ${total}` : "";
+      $("#h-prev").disabled = offset === 0;
+      $("#h-next").disabled = offset + PAGE >= total;
+    } catch (e) { setMsg($("#msg"), e.message, "error"); }
+  }
+  for (const id of ["#h-action", "#h-field"]) $(id).addEventListener("change", () => { offset = 0; list(); });
+  $("#h-prev").addEventListener("click", () => { offset = Math.max(0, offset - PAGE); list(); });
+  $("#h-next").addEventListener("click", () => { offset += PAGE; list(); });
+  $("#h-clear").addEventListener("click", () => { user = null; offset = 0; list(); });
+  function forUser(id, label) { user = { id, label }; offset = 0; showTab("history"); }
+  return { list, forUser };
+})();
 
 // ====================================================================== registro
 const Log = (() => {

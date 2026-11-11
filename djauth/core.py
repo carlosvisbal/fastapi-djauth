@@ -15,6 +15,7 @@ import time
 from collections import deque
 from collections.abc import Iterable
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from inspect import signature as inspect_signature
@@ -43,6 +44,26 @@ from djauth.validators import normalize_email, validate_password, validate_usern
 
 logger = logging.getLogger("djauth")
 
+# IP de la petición en curso: la fija la API para que el historial de cambios la anote sin tener que
+# pasarla a cada método. Fuera de una petición (scripts, comandos) queda vacía.
+request_ip: ContextVar[str] = ContextVar("djauth_request_ip", default="")
+
+# Campos del usuario que registra el historial, con su nombre para mostrar. La contraseña nunca se
+# guarda (solo que cambió); `last_login` y `date_joined` no son cambios hechos por una persona.
+HISTORY_FIELDS = {
+    "username": "Usuario",
+    "email": "Correo",
+    "first_name": "Nombre",
+    "last_name": "Apellidos",
+    "is_active": "Activo",
+    "is_staff": "Acceso a la administración",
+    "is_superuser": "Superusuario",
+    "groups": "Grupos",
+    "permissions": "Permisos",
+}
+HISTORY_ACTIONS = ("create", "update", "password", "delete")
+HIDDEN = {"hidden": True}  # valor de un campo sensible o de la contraseña en el historial
+
 # Permisos propios de la administración, con los mismos nombres que usa Django.
 BUILTIN_PERMISSIONS = {
     "auth": {
@@ -56,6 +77,7 @@ BUILTIN_PERMISSIONS = {
         "delete_group": "Puede eliminar grupos",
         "view_permission": "Puede ver permisos",
         "view_logentry": "Puede ver el registro de acciones",
+        "view_userchange": "Puede ver el historial de cambios de usuarios",
     }
 }
 
@@ -194,7 +216,11 @@ class AuthKit:
                 email = boot[2] if len(boot) > 2 else ""
                 identifier = (email or boot[0]) if self.email_login else boot[0]
                 self.create_superuser(
-                    identifier, boot[1], email=email or identifier if self.email_login else email, validate=False
+                    identifier,
+                    boot[1],
+                    email=email or identifier if self.email_login else email,
+                    validate=False,
+                    reason="Superusuario inicial (bootstrap_superuser).",
                 )
         return self
 
@@ -334,6 +360,129 @@ class AuthKit:
             )
         )
 
+    # ================================================================== historial de cambios del usuario
+    def _user_snapshot(self, user: Any) -> dict[str, Any]:
+        """Valores auditables del usuario (sin contraseña), listos para JSON."""
+        snap: dict[str, Any] = {
+            "username": user.username,
+            "email": user.email or "",
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "is_active": bool(user.is_active),
+            "is_staff": bool(user.is_staff),
+            "is_superuser": bool(user.is_superuser),
+            "groups": sorted(g.name for g in user.groups),
+            "permissions": sorted(p.key for p in user.user_permissions),
+        }
+        for f in self.custom_fields:
+            snap[f.name] = to_json(getattr(user, f.name, None))
+        extra = user.extra or {}
+        for f in self.settings.extra_fields:
+            snap[f"extra.{f.name}"] = extra.get(f.name)
+        return snap
+
+    def _sensitive_fields(self) -> set[str]:
+        return {f.name for f in self.custom_fields if f.sensitive} | {
+            f"extra.{f.name}" for f in self.settings.extra_fields if f.sensitive
+        }
+
+    def _diff(self, before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+        """{campo: {"old": …, "new": …}} de lo que cambió; los campos sensibles, sin valores."""
+        hidden = self._sensitive_fields()
+        empty = (None, "", [])
+        out: dict[str, Any] = {}
+        for name in dict.fromkeys([*before, *after]):
+            old, new = before.get(name), after.get(name)
+            if old == new or (old in empty and new in empty):
+                continue
+            out[name] = dict(HIDDEN) if name in hidden else {"old": old, "new": new}
+        return out
+
+    def _record_change(
+        self,
+        db: OrmSession,
+        action: str,
+        user: Any,
+        changes: dict[str, Any],
+        actor: AuthUser | None,
+        reason: str = "",
+    ) -> None:
+        """Anota un cambio del usuario en la misma transacción que el cambio: o quedan los dos o ninguno."""
+        if not self.settings.user_history or not changes:
+            return
+        db.add(
+            self.models.UserChange(
+                changed_at=now(),
+                user_id=user.id,
+                user_repr=str(user.username)[:150],
+                action=action,
+                changes=changes,
+                fields="," + ",".join(changes) + ",",
+                actor_id=actor.id if actor and not actor.is_service else None,
+                actor_repr=(actor.username if actor else "")[:150],
+                reason=(reason or "").strip()[:255],
+                ip=request_ip.get()[:64],
+            )
+        )
+
+    def user_history(
+        self,
+        user_id: int | None = None,
+        *,
+        actor_id: int | None = None,
+        action: str | None = None,
+        field: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Historial de cambios de usuarios, del más reciente al más antiguo.
+
+        Incluye a los usuarios ya eliminados. `field` filtra por campo (`"email"`, `"groups"`,
+        `"password"`, `"extra.telefono"`…). Devuelve (registros, total sin paginar).
+        """
+        if action is not None and action not in HISTORY_ACTIONS:
+            raise ValidationError(
+                {"action": [f"Acción desconocida: {action}."]},
+                hint=f"Use una de: {', '.join(HISTORY_ACTIONS)}.",
+                code="invalid_filter",
+            )
+        H = self.models.UserChange
+        stmt = select(H)
+        if user_id is not None:
+            stmt = stmt.where(H.user_id == user_id)
+        if actor_id is not None:
+            stmt = stmt.where(H.actor_id == actor_id)
+        if action:
+            stmt = stmt.where(H.action == action)
+        if field:
+            # Escapado: un "_" o "%" en el nombre del campo no debe actuar como comodín.
+            pattern = "%," + field.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + ",%"
+            stmt = stmt.where(H.fields.like(pattern, escape="\\"))
+        if since is not None:
+            stmt = stmt.where(H.changed_at >= since)
+        if until is not None:
+            stmt = stmt.where(H.changed_at <= until)
+        with self._db() as db:
+            total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+            rows = db.scalars(stmt.order_by(H.id.desc()).limit(limit).offset(offset))
+            return [
+                {
+                    "id": h.id,
+                    "changed_at": h.changed_at.isoformat(),
+                    "user_id": h.user_id,
+                    "user": h.user_repr,
+                    "action": h.action,
+                    "changes": h.changes or {},
+                    "actor_id": h.actor_id,
+                    "actor": h.actor_repr or "sistema",
+                    "reason": h.reason,
+                    "ip": h.ip,
+                }
+                for h in rows
+            ], int(total or 0)
+
     # ================================================================== reglas de privilegio
     # Django deja que cualquier staff con `change_user` se nombre superusuario; aquí no: quien no es
     # superusuario no puede crear ni tocar superusuarios, ni conceder permisos que él mismo no tiene.
@@ -455,10 +604,12 @@ class AuthKit:
         fields: dict[str, Any] | None = None,
         actor: AuthUser | None = None,
         validate: bool = True,
+        reason: str = "",
     ) -> dict[str, Any]:
         """Crea un usuario. `password=None` lo deja sin contraseña utilizable (no puede entrar).
 
         `fields` son los valores de las columnas propias (`user_mixin`); `extra`, los campos JSON.
+        `reason` es el motivo que se anota en el historial de cambios.
         """
         U = self.models.User
         username, email = self._identity(username, email)
@@ -500,6 +651,10 @@ class AuthKit:
             db.add(user)
             db.flush()
             self._log(db, actor, "add", "user", user, "Usuario creado.")
+            changes = self._diff({}, self._user_snapshot(user))
+            if password is not None:
+                changes["password"] = dict(HIDDEN)
+            self._record_change(db, "create", user, changes, actor, reason)
             db.commit()
             return self._user_dict(user)
 
@@ -572,12 +727,18 @@ class AuthKit:
             rows = db.scalars(stmt.order_by(column.desc() if desc else column.asc(), U.id).limit(limit).offset(offset))
             return [self._user_dict(u) for u in rows], int(total or 0)
 
-    def update_user(self, user_id: int, changes: dict[str, Any], *, actor: AuthUser | None = None) -> dict[str, Any]:
-        """Modifica los campos presentes en `changes` (`groups` y `permissions` son listas de ids)."""
+    def update_user(
+        self, user_id: int, changes: dict[str, Any], *, actor: AuthUser | None = None, reason: str = ""
+    ) -> dict[str, Any]:
+        """Modifica los campos presentes en `changes` (`groups` y `permissions` son listas de ids).
+
+        Lo que cambia queda en el historial (valor anterior y nuevo), con `reason` como motivo.
+        """
         U = self.models.User
         with self._db() as db:
             user = self._get_user(db, user_id)
             self._check_can_touch(actor, user)
+            before = self._user_snapshot(user)
             changed: list[str] = []
             if self.email_login:
                 changes = {k: v for k, v in changes.items() if k != "username"}  # el usuario ES el correo
@@ -651,13 +812,14 @@ class AuthKit:
                     changed.append("extra")
             if changed:
                 self._log(db, actor, "change", "user", user, f"Modificado: {', '.join(changed)}.")
+                self._record_change(db, "update", user, self._diff(before, self._user_snapshot(user)), actor, reason)
                 if "is_active" in changed and not user.is_active:
                     db.execute(delete(self.models.Session).where(self.models.Session.user_id == user.id))
                 db.commit()
                 self._invalidate()
             return self._user_dict(user)
 
-    def delete_user(self, user_id: int, *, actor: AuthUser | None = None) -> None:
+    def delete_user(self, user_id: int, *, actor: AuthUser | None = None, reason: str = "") -> None:
         with self._db() as db:
             user = self._get_user(db, user_id)
             self._check_can_touch(actor, user)
@@ -672,6 +834,8 @@ class AuthKit:
                     hint="Nombre a otro usuario superusuario antes de quitarle ese nivel o eliminarlo.",
                 )
             self._log(db, actor, "delete", "user", user, "Usuario eliminado.")
+            # Se guardan los últimos valores: el historial permite saber qué datos tenía.
+            self._record_change(db, "delete", user, self._diff(self._user_snapshot(user), {}), actor, reason)
             db.execute(delete(self.models.Session).where(self.models.Session.user_id == user.id))
             db.delete(user)
             db.commit()
@@ -690,8 +854,12 @@ class AuthKit:
         actor: AuthUser | None = None,
         keep_session: str | None = None,
         validate: bool = True,
+        reason: str = "",
     ) -> None:
-        """Cambia la contraseña y cierra las demás sesiones del usuario (como hace Django)."""
+        """Cambia la contraseña y cierra las demás sesiones del usuario (como hace Django).
+
+        `password=None` la desactiva (el usuario ya no puede entrar con contraseña).
+        """
         S = self.models.Session
         with self._db() as db:
             user = self._get_user(db, user_id)
@@ -710,6 +878,16 @@ class AuthKit:
                 stmt = stmt.where(S.key_hash != self._hash(keep_session))
             db.execute(stmt)
             self._log(db, actor, "password", "user", user, "Contraseña cambiada.")
+            if not reason:
+                if password is None:
+                    reason = "Contraseña desactivada."
+                elif actor is None:
+                    reason = ""
+                elif actor.id == user.id:
+                    reason = "Cambiada por el propio usuario."
+                else:
+                    reason = "Asignada por un administrador."
+            self._record_change(db, "password", user, {"password": dict(HIDDEN)}, actor, reason)
             db.commit()
         self._invalidate()
 
@@ -755,7 +933,7 @@ class AuthKit:
                 raise invalid
             if time.time() - ts > self.settings.password_reset_timeout:
                 raise invalid
-        self.set_password(user_id, new_password)
+        self.set_password(user_id, new_password, reason="Restablecida con un enlace.")
 
     # ================================================================== inicio de sesión
     @staticmethod
@@ -846,12 +1024,12 @@ class AuthKit:
         defaults = dict(defaults or {})
         row = self.find_user_row(username)
         if row is None:
-            self.create_user(username, None, validate=False, **defaults)
+            self.create_user(username, None, validate=False, reason="Creado por un backend de autenticación.", **defaults)
         elif update:
             changes = {k: v for k, v in defaults.items() if k in ("email", "first_name", "last_name", "extra")}
             changes.update(defaults.get("fields") or {})
             if changes:
-                self.update_user(row.id, changes)
+                self.update_user(row.id, changes, reason="Sincronizado desde un backend de autenticación.")
         return self.find_user_row(username)
 
     def login(self, user: AuthUser, *, kind: str = "session", ip: str = "", user_agent: str = "") -> str:
@@ -1010,6 +1188,14 @@ class AuthKit:
         with self._db() as db:
             group = self._get_group(db, group_id)
             self._log(db, actor, "delete", "group", group, "Grupo eliminado.")
+            # Los miembros pierden el grupo: es un cambio de cada usuario y queda en su historial.
+            U = self.models.User
+            for user in db.scalars(select(U).where(U.groups.any(self.models.Group.id == group.id))):
+                names = sorted(g.name for g in user.groups)
+                remaining = [n for n in names if n != group.name]
+                self._record_change(
+                    db, "update", user, {"groups": {"old": names, "new": remaining}}, actor, f"Se eliminó el grupo {group.name}."
+                )
             db.delete(group)
             db.commit()
         self._invalidate()

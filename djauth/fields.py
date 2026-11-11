@@ -7,7 +7,8 @@ Cada columna toma su configuración de `mapped_column(..., info={...})`:
         info={"label": "Sede", "choices": ["Norte", "Sur"], "required": True})
 
 Claves de `info`: `label`, `help_text`, `choices`, `required`, `editable` (False = solo lectura en la
-administración y la API).
+administración y la API) y `sensitive` (True = el historial de cambios anota que cambió, sin guardar
+los valores).
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ class UserField:
     max_length: int | None
     choices: tuple[str, ...]
     help_text: str
+    sensitive: bool = False
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -51,6 +53,7 @@ class UserField:
             "max_length": self.max_length,
             "choices": list(self.choices),
             "help_text": self.help_text,
+            "sensitive": self.sensitive,
         }
 
     def clean(self, value: Any) -> Any:
@@ -148,6 +151,7 @@ def user_fields(user_model: Any) -> tuple[UserField, ...]:
                 max_length=getattr(sql_type, "length", None) if kind in ("text", "choice") else None,
                 choices=choices,
                 help_text=str(info.get("help_text", "")),
+                sensitive=bool(info.get("sensitive", False)),
             )
         )
     return tuple(out)

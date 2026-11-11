@@ -29,6 +29,7 @@ Todas las respuestas de error tienen la misma forma, también en las rutas de su
 | 400 | `self_delete` | Un usuario intentó eliminarse a sí mismo. |
 | 400 | `invalid_reset_link` | Enlace de restablecimiento no válido, usado o caducado. |
 | 400 | `payload_too_large` | Petición de token demasiado grande. |
+| 400 | `invalid_filter` | Desde código: filtro no válido en `kit.user_history()` (acción desconocida). |
 | 400 | `service_account` | Se intentó cambiar perfil o contraseña de una llave de API. |
 | 401 | `not_authenticated` | Sin sesión, sesión caducada o token inválido. |
 | 401 | `invalid_credentials` | Usuario o contraseña incorrectos (mismo mensaje en ambos casos, a propósito). |

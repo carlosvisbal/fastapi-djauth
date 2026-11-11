@@ -19,6 +19,8 @@ class ExtraField:
     choices: tuple[str, ...] = ()
     required: bool = False
     help_text: str = ""
+    # True: el historial de cambios registra que cambió, pero no los valores (datos personales).
+    sensitive: bool = False
 
     def clean(self, value: Any) -> Any:
         if value in (None, ""):
@@ -44,7 +46,7 @@ class AuthSettings:
     # Cualquier URL de SQLAlchemy: sqlite:///ruta/auth.sqlite3, postgresql+psycopg://…, mysql+pymysql://…
     database_url: str = "sqlite:///auth.sqlite3"
     # Alternativa con el formato de DATABASES["default"] de Django (tiene prioridad sobre database_url):
-    # {"ENGINE": "django.db.backends.postgresql", "NAME": …, "USER": …, "PASSWORD": …, "HOST": …, "PORT": …}
+    # {"ENGINE": "postgresql", "NAME": …, "USER": …, "PASSWORD": …, "HOST": …, "PORT": …}
     database: dict[str, Any] | None = None
     # Segundos antes de renovar una conexión del pool (como CONN_MAX_AGE): evita conexiones viejas.
     database_conn_max_age: int = 1800
@@ -105,6 +107,12 @@ class AuthSettings:
     # SQLAlchemy (`telefono: Mapped[str] = mapped_column(String(30), default="")`). Se añaden a la
     # tabla al arrancar y aparecen en la API y en la administración. Ver README, "Extender el usuario".
     user_mixin: type | None = None
+
+    # --- Historial de cambios del usuario ---
+    # Guarda cada alta, modificación (valor anterior y nuevo por campo), cambio de contraseña (sin
+    # valores) y eliminación de usuarios, con quién lo hizo, desde qué IP y el motivo. Solo cambios
+    # del usuario: los inicios de sesión y demás acciones van en el registro general. Ver docs.
+    user_history: bool = True
 
     # --- Primer arranque ---
     # (usuario, contraseña, email): crea este superusuario si la base no tiene ningún usuario.

@@ -1,5 +1,6 @@
 """Tablas (SQLAlchemy 2). Misma estructura que `django.contrib.auth`: usuario, grupo, permiso y sus
-relaciones, más sesiones y el registro de acciones de la administración."""
+relaciones, más sesiones, el registro de acciones de la administración y el historial de cambios
+de los usuarios."""
 
 from __future__ import annotations
 
@@ -101,6 +102,25 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
         object_repr: Mapped[str] = mapped_column(String(200), default="")
         message: Mapped[str] = mapped_column(Text, default="")
 
+    class UserChange(Base):
+        """Historial de cambios del usuario: solo modificaciones de sus datos, campo por campo.
+
+        Sin clave foránea a propósito: el historial de un usuario sobrevive a su eliminación.
+        """
+
+        __tablename__ = f"{prefix}user_history"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        changed_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+        user_id: Mapped[int] = mapped_column(Integer, index=True)
+        user_repr: Mapped[str] = mapped_column(String(150), default="")
+        action: Mapped[str] = mapped_column(String(20))  # create | update | password | delete
+        changes: Mapped[dict] = mapped_column(JSON, default=dict)  # {campo: {"old": …, "new": …}}
+        fields: Mapped[str] = mapped_column(Text, default="")  # ",email,is_active," para filtrar por campo
+        actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+        actor_repr: Mapped[str] = mapped_column(String(150), default="")
+        reason: Mapped[str] = mapped_column(String(255), default="")
+        ip: Mapped[str] = mapped_column(String(64), default="")
+
     class Meta(Base):
         __tablename__ = f"{prefix}meta"
         key: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -111,4 +131,5 @@ def build_models(prefix: str = "auth_", user_mixin: type | None = None) -> Any:
 
     m = Models()
     m.Base, m.User, m.Group, m.Permission, m.Session, m.LogEntry, m.Meta = Base, User, Group, Permission, Session, LogEntry, Meta
+    m.UserChange = UserChange
     return m

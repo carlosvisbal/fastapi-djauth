@@ -87,6 +87,7 @@ Las conexiones se verifican antes de usarse (una conexión cortada por el servid
 | `extra_fields` | `()` | Campos propios guardados en JSON. [Guía](07-extender-usuario.md). |
 | `permissions` | `{}` | Permisos del proyecto: `{"ventas": {"aprobar": "Puede aprobar"}}`. |
 | `bootstrap_superuser` | `None` | `(usuario, contraseña, email)`: se crea si la base no tiene usuarios. |
+| `user_history` | `True` | Guarda el historial de cambios de cada usuario (valor anterior y nuevo). [Guía](14-historial-de-cambios.md). |
 
 ## Leer la configuración del entorno
 

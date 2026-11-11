@@ -1,7 +1,7 @@
-"""Conexión a la base con el mismo formato que `DATABASES["default"]` de Django.
+"""Conexión a la base con un diccionario (mismo formato que `DATABASES["default"]` de Django).
 
     AuthSettings(database={
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "postgresql",
         "NAME": "miapp",
         "USER": "app",
         "PASSWORD": os.environ["DB_PASSWORD"],
@@ -23,7 +23,7 @@ from sqlalchemy.engine import URL
 
 from djauth.errors import AuthError
 
-# Motor de Django (o alias corto) -> (dialecto de SQLAlchemy, controladores en orden de preferencia)
+# Motor (nombre corto o el de Django) -> (dialecto de SQLAlchemy, controladores en orden de preferencia)
 ENGINES: dict[str, tuple[str, tuple[tuple[str, str], ...]]] = {
     "postgresql": ("postgresql", (("psycopg", "psycopg"), ("psycopg2", "psycopg2"), ("asyncpg", "asyncpg"))),
     "mysql": ("mysql", (("pymysql", "pymysql"), ("MySQLdb", "mysqldb"), ("mysql.connector", "mysqlconnector"))),
@@ -83,13 +83,13 @@ def url_from_django(config: dict[str, Any]) -> URL:
     if not raw_engine:
         raise DatabaseConfigError(
             "Falta ENGINE en la configuración de la base de datos.",
-            hint='Use p. ej. "django.db.backends.postgresql", "django.db.backends.mysql" o "django.db.backends.sqlite3".',
+            hint='Use p. ej. "postgresql", "mysql", "oracle", "mssql" o "sqlite".',
         )
     engine = ALIASES.get(raw_engine, raw_engine)
     if engine not in ENGINES:
         raise DatabaseConfigError(
             f"Motor de base de datos no soportado: {raw_engine}.",
-            hint=f"Motores válidos: {', '.join(sorted({*ALIASES, *ENGINES}))}.",
+            hint=f"Motores válidos: {', '.join(ENGINES)} (también se aceptan los nombres de motor de Django).",
         )
     name = str(cfg.get("NAME") or "")
     if engine == "sqlite":
