@@ -69,9 +69,7 @@ class Perfil:
     """Columnas propias del usuario (como heredar de AbstractUser en Django)."""
 
     telefono: Mapped[str] = mapped_column(String(20), default="", info={"label": "Teléfono", "help_text": "Con indicativo"})
-    sede: Mapped[str | None] = mapped_column(
-        String(30), nullable=True, info={"label": "Sede", "choices": ["Norte", "Sur"]}
-    )
+    sede: Mapped[str | None] = mapped_column(String(30), nullable=True, info={"label": "Sede", "choices": ["Norte", "Sur"]})
     turno: Mapped[int | None] = mapped_column(Integer, nullable=True)
     es_supervisor: Mapped[bool] = mapped_column(Boolean, default=False)
     ingreso: Mapped[date | None] = mapped_column(Date, nullable=True)

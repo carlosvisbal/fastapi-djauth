@@ -2,6 +2,11 @@
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.4.1] - 2026-11-11
+
+### Cambiado
+- Los ejemplos de la documentación, la plantilla de `startproject`, las pruebas y el texto de ayuda del campo *Motivo del cambio* en la administración usan datos genéricos (empresa, sedes y producto de ejemplo).
+
 ## [1.4.0] - 2026-11-11
 
 Primera versión publicada en PyPI.

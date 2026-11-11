@@ -309,9 +309,7 @@ def test_extra_fields(tmp_path):
         assert client.get("/auth/api/config").json()["extra_fields"][0]["choices"] == ["Norte", "Sur"]
         missing = client.post("/auth/api/users", json={"username": "op", "password": PWD})
         assert missing.status_code == 400 and "extra.sede" in missing.json()["errors"]
-        ok = client.post(
-            "/auth/api/users", json={"username": "op", "password": PWD, "extra": {"sede": "Sur", "turno": "2"}}
-        )
+        ok = client.post("/auth/api/users", json={"username": "op", "password": PWD, "extra": {"sede": "Sur", "turno": "2"}})
         assert ok.json()["extra"] == {"sede": "Sur", "turno": 2}
         assert (
             client.post("/auth/api/users", json={"username": "op2", "password": PWD, "extra": {"sede": "Este"}}).status_code
