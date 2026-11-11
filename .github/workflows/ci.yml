@@ -1,0 +1,154 @@
+# Pruebas, calidad y seguridad en cada push y pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calidad:
+    name: Estilo, tipos y seguridad
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Ruff (errores y formato)
+        run: |
+          uvx ruff check djauth tests examples
+          uvx ruff format --check djauth tests examples
+      - name: Mypy (tipos)
+        run: uvx --with "fastapi>=0.110" --with "sqlalchemy>=2.0.24" --with "pydantic>=2.5" mypy
+      - name: Bandit (análisis de seguridad del código)
+        run: uvx bandit -q -r djauth
+      - name: pip-audit (vulnerabilidades conocidas en dependencias)
+        run: |
+          uv venv && uv pip install .
+          uv pip freeze --exclude fastapi-djauth > requisitos.txt
+          uvx pip-audit -r requisitos.txt --progress-spinner off
+
+  pruebas:
+    name: Python ${{ matrix.python }} · ${{ matrix.os }}${{ matrix.resolution == 'lowest-direct' && ' · versiones mínimas' || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+        resolution: [highest]
+        include:
+          # Las versiones mínimas declaradas en pyproject.toml deben funcionar de verdad.
+          - { os: ubuntu-latest, python: "3.11", resolution: lowest-direct }
+          - { os: windows-latest, python: "3.14", resolution: highest }
+          - { os: macos-latest, python: "3.14", resolution: highest }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv pip install --resolution ${{ matrix.resolution }} -e ".[test]"
+      - run: uv run --no-sync pytest -p no:cacheprovider
+
+  motores:
+    name: PostgreSQL, MySQL, Oracle y SQL Server reales
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: djauth, POSTGRES_PASSWORD: djauth, POSTGRES_DB: djauth }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U djauth" --health-interval 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env: { MYSQL_ROOT_PASSWORD: root, MYSQL_USER: djauth, MYSQL_PASSWORD: djauth, MYSQL_DATABASE: djauth }
+        ports: ["3306:3306"]
+        options: --health-cmd "mysqladmin ping -udjauth -pdjauth" --health-interval 5s --health-retries 30
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env: { ORACLE_PASSWORD: djauth, APP_USER: djauth, APP_USER_PASSWORD: djauth }
+        ports: ["1521:1521"]
+        options: --health-cmd healthcheck.sh --health-interval 10s --health-retries 30
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env: { ACCEPT_EULA: "Y", MSSQL_SA_PASSWORD: "Djauth-2026!" }
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Djauth-2026!' -Q 'SELECT 1'"
+          --health-interval 10s --health-retries 30
+    env:
+      DJAUTH_TEST_DATABASE_URLS: >-
+        postgresql+psycopg://djauth:djauth@127.0.0.1:5432/djauth
+        mysql+pymysql://djauth:djauth@127.0.0.1:3306/djauth
+        oracle+oracledb://djauth:djauth@127.0.0.1:1521/?service_name=FREEPDB1
+        mssql+pymssql://sa:Djauth-2026!@127.0.0.1:1433/djauth
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.13"
+      - name: Crear la base en SQL Server
+        env:
+          MSSQL_CONTAINER: ${{ job.services.mssql.id }}
+        run: >-
+          docker exec "$MSSQL_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Djauth-2026!'
+          -Q "CREATE DATABASE djauth"
+      - run: uv pip install -e ".[test,postgres,mysql,oracle,mssql]"
+      - run: uv run --no-sync pytest -p no:cacheprovider tests/test_engines.py -v
+
+  plantilla:
+    name: Plantilla de djauth startproject (${{ matrix.versiones }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        versiones: [probadas, ultimas]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Generar un proyecto con el djauth de este commit
+        env:
+          VERSIONES: ${{ matrix.versiones }}
+        run: |
+          mkdir /tmp/proyecto && cd /tmp/proyecto
+          DJAUTH_PLANTILLA_FUENTE="$GITHUB_WORKSPACE" uv run --project "$GITHUB_WORKSPACE" djauth startproject demo --versiones "$VERSIONES"
+      - name: Comprobaciones del proyecto generado
+        working-directory: /tmp/proyecto/demo
+        run: |
+          uv sync --locked
+          uv run ruff check . && uv run ruff format --check .
+          uv run mypy
+          uv run pytest
+          uv run alembic upgrade head && uv run alembic check
+
+  paquete:
+    name: Construir y comprobar el paquete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - name: Instalar la rueda en un entorno limpio y probarla
+        run: |
+          uv venv /tmp/limpio
+          uv pip install -p /tmp/limpio dist/*.whl
+          /tmp/limpio/bin/python -I -c "import djauth, pathlib; assert (pathlib.Path(djauth.__file__).parent / 'py.typed').exists(); print(djauth.__version__)"
+          /tmp/limpio/bin/djauth --help

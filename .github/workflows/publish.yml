@@ -1,0 +1,94 @@
+# Publica una versión al crear una Release en GitHub: TestPyPI → PyPI → archivos en la Release.
+#
+# Sin contraseñas ni tokens guardados: usa Trusted Publishing (OIDC). Configuración única, en
+# https://pypi.org/manage/account/publishing/ y https://test.pypi.org/manage/account/publishing/ :
+#   Project name: fastapi-djauth · Owner: carlosvisbal · Repository: fastapi-djauth
+#   Workflow: publish.yml · Environment: pypi (en TestPyPI: testpypi)
+#
+# PyPI guarda además una atestación firmada (PEP 740) que prueba que el paquete salió de este
+# repositorio y de este flujo.
+name: Publicar
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  construir:
+    name: Construir
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: La etiqueta coincide con la versión del paquete
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(grep -Po '__version__ = "\K[^"]+' djauth/__init__.py)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::La etiqueta $TAG no coincide con __version__ = $version (se esperaba v$version)"
+            exit 1
+          fi
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  testpypi:
+    name: Publicar en TestPyPI
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/fastapi-djauth
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  pypi:
+    name: Publicar en PyPI
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fastapi-djauth
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  release:
+    name: Adjuntar los archivos a la Release
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
