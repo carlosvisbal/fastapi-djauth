@@ -58,6 +58,22 @@ def test_full_flow(url_prefix):
         kit.create_user("ANA@EMPRESA.COM", PWD + "y")
 
 
+def test_custom_permission_and_group_deletion(url_prefix):
+    url, prefix = url_prefix
+    kit = kit_for(url, prefix)
+    perm = kit.create_permission("ventas", "anular", "Puede anular")
+    group = kit.create_group("Caja", [perm["id"]])
+    user = kit.create_user("ana", PWD, groups=[group["id"]], permissions=[perm["id"]])
+    assert kit.get_by_username("ana").has_perm("ventas.anular")
+    kit.delete_permission(perm["id"])
+    assert not kit.get_by_username("ana").has_perm("ventas.anular")
+    kit.delete_group(group["id"])
+    assert kit.get_by_username("ana").groups == ()
+    # Al arrancar de nuevo se limpian filas huérfanas (la consulta debe funcionar en cada motor).
+    kit_for(url, prefix)
+    assert kit.get_user(user["id"])["group_ids"] == []
+
+
 def test_new_custom_column_is_added_to_existing_table(url_prefix):
     url, prefix = url_prefix
     kit_for(url, prefix).create_user("beto", PWD)

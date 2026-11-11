@@ -36,6 +36,26 @@ kit.register_permissions("informes", {"exportar": "Puede exportar informes"})
 
 Aparecen solos en la administración. Cambiar la descripción en el código la actualiza al arrancar.
 
+## Crear permisos desde la administración
+
+Como agregar un `Permission` en Django: en la pestaña **Permisos** (o `POST /auth/api/permissions`) se crean permisos propios sin tocar el código, por ejemplo para una regla nueva (`rule(r"^/informes", "informes.exportar")`) o para que la interfaz muestre u oculte algo según `user.has_perm(...)`.
+
+```python
+kit.create_permission("informes", "exportar", "Puede exportar informes")   # devuelve {"id", "key", …}
+kit.update_permission(perm_id, {"name": "Puede exportar informes en Excel"})
+kit.delete_permission(perm_id)
+```
+
+Reglas que se cumplen siempre:
+
+- `app_label` y `codename` usan minúsculas, números y guion bajo, empezando por una letra. Las aplicaciones de djauth (`auth`, `sessions`, `admin`) están reservadas.
+- Los permisos que declara el código (los de djauth y los de `permissions=` o `register_permissions`) aparecen como **Código**: no se renombran ni se eliminan desde la administración, porque la aplicación los vuelve a crear al arrancar. Los demás aparecen como **Propio**.
+- El código (`app.codename`) no cambia después de creado, porque las rutas lo usan por ese nombre. Solo se edita la descripción.
+- Crear un permiso no lo concede a nadie. Para asignarlo a un grupo o a un usuario hay que tenerlo o ser superusuario, así que crear permisos no sirve para darse privilegios.
+- Al eliminarlo, los grupos y usuarios que lo tenían lo pierden. Queda en el registro de acciones (con los grupos afectados) y en el historial de cada usuario que lo tenía asignado directamente.
+
+Requieren `auth.add_permission`, `auth.change_permission` y `auth.delete_permission`.
+
 ## Crear roles iniciales
 
 ```python
@@ -79,4 +99,4 @@ link_token = kit.make_reset_token(user_id)              # para enviar un enlace 
 
 ## Permisos de la administración
 
-`auth.view_user`, `auth.add_user`, `auth.change_user`, `auth.delete_user`, `auth.view_group`, `auth.add_group`, `auth.change_group`, `auth.delete_group`, `auth.view_permission`, `auth.view_logentry`. Para entrar a la administración hace falta además **"Acceso a la administración"** (`is_staff`).
+`auth.view_user`, `auth.add_user`, `auth.change_user`, `auth.delete_user`, `auth.view_group`, `auth.add_group`, `auth.change_group`, `auth.delete_group`, `auth.view_permission`, `auth.add_permission`, `auth.change_permission`, `auth.delete_permission`, `auth.view_logentry`, `auth.view_userchange`. Para entrar a la administración hace falta además **"Acceso a la administración"** (`is_staff`).

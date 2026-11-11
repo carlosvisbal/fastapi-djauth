@@ -34,7 +34,11 @@ Todas bajo `/auth/api` (o el prefijo que pase a `install`). La documentación in
 | POST | `/users/{id}/logout` | `auth.change_user` | Cerrar todas sus sesiones y tokens |
 | GET, POST | `/groups` | `auth.view_group` / `auth.add_group` | Listar / crear `{"name", "permissions": [ids]}` |
 | GET, PATCH, DELETE | `/groups/{id}` | `auth.view_group` / `change_group` / `delete_group` | Grupo |
-| GET | `/permissions` | personal | Permisos disponibles (con su `id`) |
+| GET | `/permissions` | personal | Permisos disponibles: `id`, `key`, `name` y `declared` (lo declara el código) |
+| POST | `/permissions` | `auth.add_permission` | Crear un permiso propio `{"app_label", "codename", "name"}` |
+| GET | `/permissions/{id}` | personal | Un permiso |
+| PATCH | `/permissions/{id}` | `auth.change_permission` | Cambiar la descripción `{"name"}` de un permiso propio |
+| DELETE | `/permissions/{id}` | `auth.delete_permission` | Eliminar un permiso propio (403 `declared_permission` si lo declara el código) |
 | GET | `/log?object_type=&object_id=&limit=&offset=` | `auth.view_logentry` | Registro de acciones |
 | GET | `/user-history?user_id=&actor_id=&action=&field=&since=&until=&limit=&offset=` | `auth.view_userchange` | [Historial de cambios del usuario](14-historial-de-cambios.md) (incluye eliminados) |
 | GET | `/users/{id}/history?action=&field=&limit=&offset=` | `auth.view_userchange` | Historial de un usuario |

@@ -14,6 +14,7 @@ $("#who").textContent = me.full_name || me.username;
 $("#logout").addEventListener("click", logout);
 
 const ACTIONS = { add: "Creó", change: "Modificó", delete: "Eliminó", password: "Cambió la contraseña", reset_link: "Generó enlace", login: "Inició sesión", logout_all: "Cerró sesiones" };
+const OBJECTS = { user: "Usuario", group: "Grupo", permission: "Permiso" };
 const pill = (on) => el("span", { class: `pill ${on ? "yes" : "no"}`, text: on ? "Sí" : "No" });
 const state = { perms: [], groups: [], tab: "users" };
 
@@ -259,7 +260,56 @@ const Groups = (() => {
 })();
 
 // ====================================================================== permisos
-const Perms = { list: () => $("#p-rows").replaceChildren(...state.perms.map((p) => el("tr", {}, el("td", { text: p.app_label }), el("td", {}, el("code", { text: p.codename })), el("td", { text: p.name })))) };
+const Perms = (() => {
+  let editing = null;
+  function rows() {
+    const q = $("#p-q").value.trim().toLowerCase();
+    const perms = state.perms.filter((p) => !q || `${p.key} ${p.name}`.toLowerCase().includes(q));
+    $("#p-rows").replaceChildren(...(perms.length ? perms.map((p) => el("tr", p.declared ? {} : { class: "clickable", tabindex: "0", onclick: () => edit(p), onkeydown: (e) => e.key === "Enter" && edit(p) },
+      el("td", { text: p.app_label }), el("td", {}, el("code", { text: p.codename }), " ", el("span", { class: `pill ${p.declared ? "" : "yes"}`, text: p.declared ? "Código" : "Propio" })),
+      el("td", { text: p.name }))) : [el("tr", {}, el("td", { colspan: 3, class: "muted", text: "Ningún permiso coincide." }))]));
+  }
+  async function list() {
+    await loadCatalog();
+    $("#p-new").hidden = !can("auth.add_permission");
+    rows();
+  }
+  function edit(p) {
+    editing = p;
+    $("#perm-edit").hidden = false;
+    $("#p-title").textContent = p ? p.key : "Nuevo permiso";
+    $("#p-app").value = p?.app_label || "";
+    $("#p-codename").value = p?.codename || "";
+    $("#p-name").value = p?.name || "";
+    $("#p-app").disabled = $("#p-codename").disabled = !!p; // el código no cambia: las rutas lo usan por ese nombre
+    const readOnly = p ? !can("auth.change_permission") : !can("auth.add_permission");
+    $("#p-name").disabled = $("#p-save").disabled = readOnly;
+    $("#p-delete").hidden = !p || !can("auth.delete_permission");
+    showKey();
+    setMsg($("#p-msg"), "");
+    showErrors($("#p-form"), {});
+  }
+  const showKey = () => ($("#p-key").textContent = `${$("#p-app").value.trim() || "aplicacion"}.${$("#p-codename").value.trim() || "codigo"}`);
+  for (const id of ["#p-app", "#p-codename"]) $(id).addEventListener("input", showKey);
+  $("#p-q").addEventListener("input", rows);
+  $("#p-new").addEventListener("click", () => edit(null));
+  $("#p-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      const saved = editing
+        ? await api(`permissions/${editing.id}`, { method: "PATCH", body: { name: $("#p-name").value.trim() } })
+        : await api("permissions", { method: "POST", body: { app_label: $("#p-app").value.trim(), codename: $("#p-codename").value.trim(), name: $("#p-name").value.trim() } });
+      await list();
+      edit(state.perms.find((p) => p.id === saved.id));
+      setMsg($("#p-msg"), "Permiso guardado.", "ok");
+    } catch (e) { showErrors($("#p-form"), e); setMsg($("#p-msg"), e.message, "error"); }
+  });
+  $("#p-delete").addEventListener("click", async () => {
+    if (!confirm(`¿Eliminar el permiso ${editing.key}? Los grupos y usuarios que lo tienen lo pierden.`)) return;
+    try { await api(`permissions/${editing.id}`, { method: "DELETE" }); $("#perm-edit").hidden = true; list(); } catch (e) { setMsg($("#p-msg"), e.message, "error"); }
+  });
+  return { list };
+})();
 
 // ====================================================================== historial de cambios de usuarios
 const History = (() => {
@@ -329,7 +379,7 @@ const Log = (() => {
       total = r.total;
       $("#l-rows").replaceChildren(...(r.items.length ? r.items.map((e) => el("tr", {},
         el("td", { text: fmtDate(e.action_time) }), el("td", { text: e.username || "sistema" }), el("td", { text: ACTIONS[e.action] ?? e.action }),
-        el("td", { text: e.object_repr ? `${e.object_type === "group" ? "Grupo" : "Usuario"} ${e.object_repr}` : "—" }), el("td", { text: e.message }))) : [el("tr", {}, el("td", { colspan: 5, class: "muted", text: "Sin registros." }))]));
+        el("td", { text: e.object_repr ? `${OBJECTS[e.object_type] ?? ""} ${e.object_repr}`.trim() : "—" }), el("td", { text: e.message }))) : [el("tr", {}, el("td", { colspan: 5, class: "muted", text: "Sin registros." }))]));
       $("#l-page").textContent = total ? `${offset + 1}–${Math.min(offset + PAGE, total)} de ${total}` : "";
       $("#l-prev").disabled = offset === 0;
       $("#l-next").disabled = offset + PAGE >= total;

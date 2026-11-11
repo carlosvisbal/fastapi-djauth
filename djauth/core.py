@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 import secrets
 import threading
 import time
@@ -74,10 +75,18 @@ BUILTIN_PERMISSIONS = {
         "change_group": "Puede modificar grupos",
         "delete_group": "Puede eliminar grupos",
         "view_permission": "Puede ver permisos",
+        "add_permission": "Puede agregar permisos",
+        "change_permission": "Puede modificar permisos",
+        "delete_permission": "Puede eliminar permisos",
         "view_logentry": "Puede ver el registro de acciones",
         "view_userchange": "Puede ver el historial de cambios de usuarios",
     }
 }
+
+# Aplicaciones de djauth (las mismas `app_label` de Django): nadie crea permisos con ellas desde la API.
+RESERVED_APP_LABELS = frozenset({"auth", "sessions", "admin"})
+# `app_label` y `codename`: minúsculas, números y guion bajo, empezando por letra (como en Django).
+PERMISSION_PART = re.compile(r"^[a-z][a-z0-9_]{0,99}$")
 
 
 def now() -> datetime:
@@ -216,6 +225,7 @@ class AuthKit:
         self._upgrade_schema()
         if self.email_login:
             self._ensure_unique_email_index()
+        self._purge_orphans()
         self._initialized = True
         self._sync_permissions()
         boot = self.settings.bootstrap_superuser
@@ -261,6 +271,31 @@ class AuthKit:
                     if default is not None:
                         conn.execute(table.update().values({column.name: default}))
                     logger.info("djauth: columna %s.%s añadida", table.name, column.name)
+
+    def _purge_orphans(self) -> None:
+        """Quita membresías y asignaciones que apuntan a grupos o permisos que ya no existen.
+
+        Versiones anteriores a la 1.5.0 dejaban esas filas en SQLite al eliminar un grupo, y el
+        siguiente grupo creado podía reutilizar el id y heredar a esos miembros.
+        """
+        M = self.models
+        user_groups = M.User.groups.property.secondary
+        user_perms = M.User.user_permissions.property.secondary
+        group_perms = M.Group.permissions.property.secondary
+        pairs = [
+            (user_groups, "group_id", M.Group),
+            (user_groups, "user_id", M.User),
+            (user_perms, "permission_id", M.Permission),
+            (user_perms, "user_id", M.User),
+            (group_perms, "permission_id", M.Permission),
+            (group_perms, "group_id", M.Group),
+            (M.Session.__table__, "user_id", M.User),
+        ]
+        with self.engine.begin() as conn:
+            for table, column, target in pairs:
+                result = conn.execute(delete(table).where(table.c[column].not_in(select(target.id))))
+                if result.rowcount:
+                    logger.warning("djauth: %s filas huérfanas quitadas de %s", result.rowcount, table.name)
 
     def _ensure_unique_email_index(self) -> None:
         """Con inicio de sesión por correo, la base garantiza que no haya dos usuarios con el mismo
@@ -375,7 +410,8 @@ class AuthKit:
                 action=action,
                 object_type=obj_type,
                 object_id=str(getattr(obj, "id", "") or ""),
-                object_repr=str(getattr(obj, "username", None) or getattr(obj, "name", None) or "")[:200],
+                # Usuario: su nombre de usuario; permiso: `app.codename`; grupo: su nombre.
+                object_repr=str(next((v for a in ("username", "key", "name") if (v := getattr(obj, a, None))), ""))[:200],
                 message=message[:2000],
             )
         )
@@ -1216,6 +1252,9 @@ class AuthKit:
                 self._record_change(
                     db, "update", user, {"groups": {"old": names, "new": remaining}}, actor, f"Se eliminó el grupo {group.name}."
                 )
+            # Se borran a mano las filas intermedias: así no depende de que el motor aplique ON DELETE
+            # CASCADE (SQLite sin claves foráneas activas, MyISAM) ni de que el id no se reutilice.
+            db.execute(delete(U.groups.property.secondary).where(U.groups.property.secondary.c.group_id == group.id))
             db.delete(group)
             db.commit()
         self._invalidate()
@@ -1238,12 +1277,121 @@ class AuthKit:
 
     # ================================================================== permisos y registro
     def list_permissions(self) -> list[dict[str, Any]]:
+        """Todos los permisos. `declared` indica si lo declara el código (no se modifica desde la API)."""
         P = self.models.Permission
         with self._db(read=True) as db:
-            return [
-                {"id": p.id, "app_label": p.app_label, "codename": p.codename, "name": p.name, "key": p.key}
-                for p in db.scalars(select(P).order_by(P.app_label, P.codename))
-            ]
+            return [self._permission_dict(p) for p in db.scalars(select(P).order_by(P.app_label, P.codename))]
+
+    def _permission_dict(self, p: Any) -> dict[str, Any]:
+        return {
+            "id": p.id,
+            "app_label": p.app_label,
+            "codename": p.codename,
+            "name": p.name,
+            "key": p.key,
+            "declared": self._is_declared(p.app_label, p.codename),
+        }
+
+    def _is_declared(self, app_label: str, codename: str) -> bool:
+        """Lo declara el código (permisos de djauth, `AuthSettings.permissions` o `register_permissions`)."""
+        return codename in self._registry.get(app_label, {})
+
+    def _get_permission(self, db: OrmSession, permission_id: int) -> Any:
+        perm = db.get(self.models.Permission, permission_id)
+        if perm is None:
+            raise NotFoundError(f"No existe un permiso con id {permission_id}.")
+        return perm
+
+    def get_permission(self, permission_id: int) -> dict[str, Any]:
+        with self._db(read=True) as db:
+            return self._permission_dict(self._get_permission(db, permission_id))
+
+    @staticmethod
+    def _permission_name(name: str) -> str:
+        name = (name or "").strip()
+        if not name:
+            raise ValidationError({"name": ["Este campo es obligatorio."]})
+        if len(name) > 255:
+            raise ValidationError({"name": ["Máximo 255 caracteres."]})
+        return name
+
+    def _check_editable(self, perm: Any) -> None:
+        if self._is_declared(perm.app_label, perm.codename):
+            raise PermissionDeniedError(
+                f"El permiso {perm.key} lo declara el código: se cambia allí, no desde la administración.",
+                code="declared_permission",
+                hint="Al arrancar, la aplicación vuelve a crear los permisos declarados con su descripción.",
+            )
+
+    def create_permission(self, app_label: str, codename: str, name: str, *, actor: AuthUser | None = None) -> dict[str, Any]:
+        """Crea un permiso propio (`app_label.codename`), como agregar un `Permission` en Django.
+
+        No se concede a nadie: se asigna luego a grupos o usuarios, y solo puede asignarlo quien ya lo
+        tiene (o un superusuario). Las aplicaciones de djauth (`auth`, `sessions`, `admin`) están reservadas.
+        """
+        app_label, codename = (app_label or "").strip(), (codename or "").strip()
+        errors: dict[str, list[str]] = {}
+        for field_name, value in (("app_label", app_label), ("codename", codename)):
+            if not PERMISSION_PART.match(value):
+                errors[field_name] = ["Use minúsculas, números y guion bajo, empezando por una letra (máximo 100 caracteres)."]
+        if "app_label" not in errors and app_label in RESERVED_APP_LABELS:
+            errors["app_label"] = [f"La aplicación {app_label!r} está reservada para djauth."]
+        try:
+            name = self._permission_name(name)
+        except ValidationError as exc:
+            errors.update(exc.errors)
+        if errors:
+            raise ValidationError(errors)
+        P = self.models.Permission
+        with self._db() as db:
+            if db.scalar(select(P.id).where(P.app_label == app_label, P.codename == codename)):
+                raise ValidationError({"codename": [f"Ya existe el permiso {app_label}.{codename}."]})
+            perm = P(app_label=app_label, codename=codename, name=name)
+            db.add(perm)
+            db.flush()
+            self._log(db, actor, "add", "permission", perm, f"Permiso {perm.key} creado.")
+            db.commit()
+            return self._permission_dict(perm)
+
+    def update_permission(self, permission_id: int, changes: dict[str, Any], *, actor: AuthUser | None = None) -> dict[str, Any]:
+        """Cambia la descripción (`name`) de un permiso propio. El código (`app_label.codename`) no
+        cambia: las rutas lo usan por ese nombre; para otro código, cree un permiso nuevo."""
+        with self._db() as db:
+            perm = self._get_permission(db, permission_id)
+            self._check_editable(perm)
+            if "name" in changes:
+                name = self._permission_name(changes["name"])
+                if name != perm.name:
+                    perm.name = name
+                    self._log(db, actor, "change", "permission", perm, f"Permiso {perm.key}: modificado name.")
+                    db.commit()
+            return self._permission_dict(perm)
+
+    def delete_permission(self, permission_id: int, *, actor: AuthUser | None = None) -> None:
+        """Elimina un permiso propio. Los grupos y usuarios que lo tenían lo pierden; el cambio queda en
+        el historial de cada usuario afectado."""
+        G, U = self.models.Group, self.models.User
+        with self._db() as db:
+            perm = self._get_permission(db, permission_id)
+            self._check_editable(perm)
+            groups = sorted(g.name for g in db.scalars(select(G).where(G.permissions.any(id=perm.id))))
+            for user in db.scalars(select(U).where(U.user_permissions.any(id=perm.id))):
+                keys = sorted(p.key for p in user.user_permissions)
+                self._record_change(
+                    db,
+                    "update",
+                    user,
+                    {"permissions": {"old": keys, "new": [k for k in keys if k != perm.key]}},
+                    actor,
+                    f"Se eliminó el permiso {perm.key}.",
+                )
+            detail = f" Lo tenían los grupos: {', '.join(groups)}." if groups else ""
+            self._log(db, actor, "delete", "permission", perm, f"Permiso {perm.key} eliminado.{detail}")
+            for table in (G.permissions.property.secondary, U.user_permissions.property.secondary):
+                db.execute(delete(table).where(table.c.permission_id == perm.id))
+            db.delete(perm)
+            db.commit()
+        self._invalidate()
 
     def list_log(
         self, *, limit: int = 100, offset: int = 0, object_type: str | None = None, object_id: str | None = None

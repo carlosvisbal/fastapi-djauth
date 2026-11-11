@@ -2,6 +2,18 @@
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.5.0] - 2026-11-11
+
+### Añadido
+- **Crear permisos desde la administración**, como agregar un `Permission` en Django: `POST`, `GET`, `PATCH` y `DELETE /auth/api/permissions/{id}`, la pestaña *Permisos* con formulario y buscador, y `kit.create_permission`, `update_permission`, `delete_permission` y `get_permission`. Nuevos permisos `auth.add_permission`, `auth.change_permission` y `auth.delete_permission`.
+- `GET /permissions` indica en `declared` si el permiso lo declara el código. Esos permisos no se renombran ni se eliminan desde la API. Las aplicaciones `auth`, `sessions` y `admin` están reservadas.
+
+### Seguridad
+- **SQLite:** al eliminar un grupo, sus miembros quedaban apuntando a su id, y el siguiente grupo creado podía reutilizarlo y heredarlos con sus permisos. Ahora las membresías se borran explícitamente, SQLite aplica las claves foráneas (`PRAGMA foreign_keys=ON`, como Django) y al arrancar se quitan las filas huérfanas que hubieran quedado de versiones anteriores. Actualice si usa SQLite y ha eliminado grupos.
+
+### Cambiado
+- Las bases SQLite que abre djauth (también las de los modelos del proyecto vía `kit.databases`) aplican las claves foráneas, como hace Django.
+
 ## [1.4.1] - 2026-11-11
 
 ### Cambiado

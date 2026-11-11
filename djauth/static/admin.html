@@ -130,10 +130,29 @@
 
     <!-- ========================================================== PERMISOS -->
     <section id="tab-perms" hidden>
-      <div class="card">
-        <h2>Permisos disponibles</h2>
-        <p class="muted">Los declara la aplicación en su código; aquí se asignan a grupos o a usuarios.</p>
-        <div class="table-wrap"><table><thead><tr><th>Aplicación</th><th>Código</th><th>Descripción</th></tr></thead><tbody id="p-rows"></tbody></table></div>
+      <div class="layout">
+        <section class="card">
+          <div class="toolbar"><h2>Permisos disponibles</h2><button class="btn primary" id="p-new">Agregar permiso</button></div>
+          <p class="muted">Los de origen <strong>código</strong> los declara la aplicación y solo se cambian allí. Los <strong>propios</strong> se crean aquí. Todos se asignan a grupos o a usuarios.</p>
+          <input type="search" id="p-q" placeholder="Filtrar permisos" aria-label="Filtrar permisos">
+          <div class="table-wrap"><table><thead><tr><th>Aplicación</th><th>Código</th><th>Descripción</th></tr></thead><tbody id="p-rows"></tbody></table></div>
+        </section>
+        <section class="card" id="perm-edit" hidden>
+          <form id="p-form" novalidate>
+            <h2 id="p-title">Permiso</h2>
+            <label class="field">Aplicación <input type="text" id="p-app" data-field="app_label" maxlength="100" required placeholder="ventas" autocomplete="off">
+              <span class="help">Minúsculas, números y guion bajo. <code>auth</code>, <code>sessions</code> y <code>admin</code> están reservadas.</span></label>
+            <label class="field">Código <input type="text" id="p-codename" data-field="codename" maxlength="100" required placeholder="aprobar_descuento" autocomplete="off">
+              <span class="help">Se usa en el código como <code id="p-key">aplicacion.codigo</code>; no se puede cambiar después.</span></label>
+            <label class="field">Descripción <input type="text" id="p-name" data-field="name" maxlength="255" required placeholder="Puede aprobar descuentos"></label>
+            <p class="help">Crearlo no lo concede a nadie: asígnelo luego a un grupo o a un usuario. Solo puede asignarlo quien ya lo tiene o un superusuario.</p>
+            <div class="actions">
+              <button class="btn primary" type="submit" id="p-save">Guardar</button>
+              <button class="btn danger" type="button" id="p-delete">Eliminar permiso</button>
+            </div>
+            <p class="msg" id="p-msg" role="status"></p>
+          </form>
+        </section>
       </div>
     </section>
 

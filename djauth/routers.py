@@ -181,6 +181,12 @@ def _normalize(config: Any, alias: str, conn_max_age: int) -> tuple[URL, dict[st
     return check_sync_driver(url_from_django(connection)), extra
 
 
+def _sqlite_foreign_keys(dbapi_connection: Any, _record: Any) -> None:
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 class Databases:
     """Las conexiones de cada alias y el router (como `django.db.connections` + `router`).
 
@@ -232,7 +238,13 @@ class Databases:
                 kwargs["poolclass"] = StaticPool  # una sola conexión: la base en memoria no se pierde
         elif options["CONN_MAX_AGE"]:
             kwargs["pool_recycle"] = options["CONN_MAX_AGE"]
-        return create_engine(url, **kwargs)
+        engine = create_engine(url, **kwargs)
+        if url.get_backend_name() == "sqlite":
+            # Como Django: SQLite solo aplica las claves foráneas (y su ON DELETE CASCADE) si se activan
+            # en cada conexión. Sin esto, borrar un grupo dejaba a sus miembros apuntando a un id que
+            # SQLite puede reutilizar para el siguiente grupo.
+            event.listen(engine, "connect", _sqlite_foreign_keys)
+        return engine
 
     def dispose(self) -> None:
         for engine in self._engines.values():

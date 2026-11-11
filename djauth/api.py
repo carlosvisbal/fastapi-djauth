@@ -481,6 +481,16 @@ class GroupUpdateIn(BaseModel):
     permissions: list[int] | None = None
 
 
+class PermissionIn(BaseModel):
+    app_label: str = Field(max_length=100)
+    codename: str = Field(max_length=100)
+    name: str = Field(max_length=255)
+
+
+class PermissionUpdateIn(BaseModel):
+    name: str | None = Field(default=None, max_length=255)
+
+
 # ====================================================================== rutas
 class _AuthRoute(APIRoute):
     """Errores del núcleo y de formato como respuestas JSON descriptivas (ver docs/errores.md)."""
@@ -783,6 +793,29 @@ def build_router(kit: AuthKit) -> APIRouter:
     @router.get("/permissions", summary="Permisos disponibles")
     def list_permissions(_: Annotated[AuthUser, Depends(require_staff)]) -> dict[str, Any]:
         return {"items": kit.list_permissions()}
+
+    @router.post("/permissions", status_code=201, summary="Crear un permiso propio")
+    def create_permission(
+        body: PermissionIn, actor: Annotated[AuthUser, Depends(staff("auth.add_permission"))]
+    ) -> dict[str, Any]:
+        return kit.create_permission(body.app_label, body.codename, body.name, actor=actor)
+
+    @router.get("/permissions/{permission_id}", summary="Ver un permiso")
+    def get_permission(permission_id: int, _: Annotated[AuthUser, Depends(require_staff)]) -> dict[str, Any]:
+        return kit.get_permission(permission_id)
+
+    @router.patch("/permissions/{permission_id}", summary="Cambiar la descripción de un permiso propio")
+    def update_permission(
+        permission_id: int,
+        body: PermissionUpdateIn,
+        actor: Annotated[AuthUser, Depends(staff("auth.change_permission"))],
+    ) -> dict[str, Any]:
+        return kit.update_permission(permission_id, body.model_dump(exclude_unset=True), actor=actor)
+
+    @router.delete("/permissions/{permission_id}", status_code=204, summary="Eliminar un permiso propio")
+    def delete_permission(permission_id: int, actor: Annotated[AuthUser, Depends(staff("auth.delete_permission"))]) -> Response:
+        kit.delete_permission(permission_id, actor=actor)
+        return Response(status_code=204)
 
     @router.get("/log", summary="Registro de acciones de la administración")
     def list_log(

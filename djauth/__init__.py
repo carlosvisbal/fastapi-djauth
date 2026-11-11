@@ -35,7 +35,7 @@ from djauth.hashers import check_password, make_password
 from djauth.routers import BaseRouter, Databases, ModelMeta, RoutingSession, model_meta
 from djauth.settings import AuthSettings, ExtraField
 
-__version__ = "1.4.1"
+__version__ = "1.5.0"
 
 __all__ = [
     "SERVICE_USER",
